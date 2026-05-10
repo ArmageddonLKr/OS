@@ -355,13 +355,24 @@ body {
 .pin-key.del { font-size: 18px; }
 .pin-key.empty { visibility: hidden; }
 
+.pin-reset-btn {
+  margin-top: 24px;
+  background: none;
+  border: none;
+  color: var(--fg-4);
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: underline;
+  -webkit-tap-highlight-color: transparent;
+}
+
 /* ── AVATAR / ORB ─────────────────────────────────── */
 .av { position: relative; flex-shrink: 0; }
 
 .av-core {
   position: absolute;
   border-radius: 50%;
-  background: radial-gradient(circle at 38% 35%, #ffffff 0%, #c9982a 60%, #2a1d00 100%);
+  background: radial-gradient(circle at 38% 35%, #ffffff 0%, #555555 60%, #111111 100%);
   top: 50%; left: 50%;
   transform: translate(-50%, -50%);
   box-shadow:
@@ -983,7 +994,7 @@ body {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: radial-gradient(circle at 38% 35%, #ffffff 0%, #c9982a 60%, #2a1d00 100%);
+  background: radial-gradient(circle at 38% 35%, #ffffff 0%, #555555 60%, #111111 100%);
   box-shadow: 0 0 8px rgba(201,152,42,0.4);
   flex-shrink: 0;
 }

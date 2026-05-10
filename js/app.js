@@ -36,6 +36,7 @@ class App {
         this.busy = false;
         this.pinBuffer = '';
         this.pinMode = 'enter';
+        this._pinErrors = 0;
         this.activeTab = 'id';
         this.currentNavTab = 'orbit';
         this.pendingImage = null;
@@ -160,6 +161,11 @@ class App {
             } else {
                 if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
                 this.updatePinDots(true);
+                this._pinErrors = (this._pinErrors || 0) + 1;
+                if (this._pinErrors >= 3) {
+                    const btn = document.getElementById('pin-reset-btn');
+                    if (btn) btn.style.display = 'block';
+                }
                 setTimeout(() => { this.pinBuffer = ''; this.updatePinDots(); }, 700);
             }
         }
@@ -2553,6 +2559,12 @@ class App {
             } catch { UI.toast('Arquivo inválido.', 'err'); }
         };
         inp.click();
+    }
+
+    pinReset() {
+        if (!confirm('Redefinir o PIN? Os seus dados permanecem. Só o código de acesso será apagado.')) return;
+        localStorage.removeItem('orbit_pin');
+        location.reload();
     }
 
     resetPin() {
