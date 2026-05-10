@@ -1,12 +1,12 @@
 {
   "name": "Orbit Sophy",
   "short_name": "Orbit",
-  "description": "Nascida no escuro. Afiada no osso.",
+  "description": "Sistema Operacional Pessoal do JR",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#000008",
-  "theme_color": "#000008",
+  "background_color": "#000000",
+  "theme_color": "#000000",
   "orientation": "portrait",
   "icons": [
     {
@@ -21,5 +21,53 @@
       "type": "image/png",
       "purpose": "maskable"
     }
-  ]
+  ],
+  "shortcuts": [
+    {
+      "name": "Chat rápido",
+      "short_name": "Chat",
+      "description": "Falar com a Orbit",
+      "url": "./?m=chat",
+      "icons": [{ "src": "./icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Nova ideia",
+      "short_name": "Ideia",
+      "description": "Registrar ideia rápida",
+      "url": "./?action=idea",
+      "icons": [{ "src": "./icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Novo gasto",
+      "short_name": "Gasto",
+      "description": "Lançar despesa",
+      "url": "./?action=expense",
+      "icons": [{ "src": "./icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Pomodoro",
+      "short_name": "Pomo",
+      "description": "Iniciar Pomodoro",
+      "url": "./?action=pomodoro",
+      "icons": [{ "src": "./icon-192.png", "sizes": "192x192" }]
+    }
+  ],
+  "protocol_handlers": [
+    {
+      "protocol": "web+orbit",
+      "url": "./?m=%s"
+    }
+  ],
+  "share_target": {
+    "action": "./",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
+  "categories": ["productivity", "lifestyle", "utilities"],
+  "lang": "pt-BR",
+  "dir": "ltr"
 }
