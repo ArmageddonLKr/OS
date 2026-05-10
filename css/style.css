@@ -244,6 +244,13 @@ body {
 .fin-chart-wrap { padding:12px 14px 4px; }
 #fin-chart { width:100%; height:180px; display:block; border-radius:var(--r-md); }
 
+/* ── FINANCE MONTH NAV ── */
+.fin-month-nav { display:flex; align-items:center; justify-content:center; gap:16px; padding:12px 14px 4px; }
+.fin-month-lbl { font-family:var(--font-mono); font-size:13px; font-weight:600; color:var(--fg-1); letter-spacing:.04em; min-width:140px; text-align:center; }
+
+/* ── HABIT CHIP STREAK ── */
+.habit-chip .hab-streak { font-family:var(--font-mono); font-size:10px; color:var(--gold); margin-left:auto; }
+
 /* ── SCREENS ─────────────────────────────────────── */
 .screen {
   position: fixed;

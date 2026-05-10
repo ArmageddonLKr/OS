@@ -59,6 +59,8 @@ class App {
         this._txFilter = 'all';
         this._editingVltId = null;
         this._currentCofreSec = 'fin';
+        this._finYear = new Date().getFullYear();
+        this._finMonth = new Date().getMonth() + 1;
 
         // Academia state
         this._cardQueue = [];
@@ -71,6 +73,9 @@ class App {
         this._currentHubSec = 'kanban';
         this._currentFeSec = 'journal';
         this._txType = 'expense';
+
+        // First-run flag
+        this._isFirstRun = !Store.get(K.pin);
 
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => this.boot());
@@ -174,6 +179,13 @@ class App {
             if (this._pendingOpenChat) { this._pendingOpenChat = false; this.openChat(); }
             if (this._pendingPomodoro) { this._pendingPomodoro = false; this.switchTab('academia'); setTimeout(() => this.switchAcad('pomo'), 300); }
             if (this._pendingAgenda) { this._pendingAgenda = false; setTimeout(() => this.switchTab('agenda'), 300); }
+            if (this._isFirstRun) {
+                this._isFirstRun = false;
+                const cfg = Store.getCfg();
+                if (!cfg.groqKey && !cfg.apiKey) {
+                    setTimeout(() => { this.activeTab = 'ai'; this.openPanel(); }, 800);
+                }
+            }
         }, 350);
     }
 
@@ -249,10 +261,11 @@ class App {
         const day = now.getDate();
         const month = now.getMonth();
 
-        let greet = hr < 5 ? 'Boa madrugada, Pai' : hr < 12 ? 'Bom dia, Pai' : hr < 18 ? 'Boa tarde, Pai' : 'Boa noite, Pai';
-        if (month === 1 && day === 4) greet = '🎂 Aniversário da Orbit, Pai!';
-        else if (month === 11 && day === 25) greet = '🎄 Feliz Natal, Pai';
-        else if (month === 11 && day === 11) greet = '⚙️ Feliz dia do Engenheiro, Pai';
+        const _nm = Store.getCfg().userName || 'Pai';
+        let greet = hr < 5 ? `Boa madrugada, ${_nm}` : hr < 12 ? `Bom dia, ${_nm}` : hr < 18 ? `Boa tarde, ${_nm}` : `Boa noite, ${_nm}`;
+        if (month === 1 && day === 4) greet = `🎂 Aniversário da Orbit, ${_nm}!`;
+        else if (month === 11 && day === 25) greet = `🎄 Feliz Natal, ${_nm}`;
+        else if (month === 11 && day === 11) greet = `⚙️ Feliz dia do Engenheiro, ${_nm}`;
 
         const subMap = {
             0: dow === 0 && hr >= 19 ? 'Domingo à noite — hora de alinhar a semana.' : 'Que o Senhor descanse bem.',
@@ -266,8 +279,15 @@ class App {
 
         const hint = document.getElementById('dcb-hint');
         if (hint) {
-            const hints = ['Falar com a Orbit...', 'O que o Senhor precisa hoje?', 'Aqui estou, Pai.', 'Pronta para agir.'];
-            hint.textContent = hints[Math.floor(Math.random() * hints.length)];
+            const cfg = Store.getCfg();
+            if (!cfg.groqKey && !cfg.apiKey) {
+                hint.textContent = '⚠️ Configure a chave de IA em Config → IA';
+                hint.style.color = 'var(--gold)';
+            } else {
+                const hints = ['Falar com a Orbit...', 'O que o Senhor precisa hoje?', 'Aqui estou, Pai.', 'Pronta para agir.'];
+                hint.textContent = hints[Math.floor(Math.random() * hints.length)];
+                hint.style.color = '';
+            }
         }
     }
 
@@ -327,8 +347,9 @@ class App {
         const today = AI.nowBR().toISOString().slice(0, 10);
         list.innerHTML = habits.map(h => {
             const done = (h.done || []).includes(today);
+            const streak = Habits.getStreak(h);
             return `<div class="habit-chip ${done ? 'done' : ''}" onclick="orbit.toggleHabit('${h.id}')">
-                <span>${h.icon || '●'}</span><span>${h.name}</span>
+                <span>${h.icon || '●'}</span><span>${h.name}</span>${streak > 1 ? `<span class="hab-streak">🔥${streak}</span>` : ''}
             </div>`;
         }).join('');
     }
@@ -643,7 +664,7 @@ class App {
     }
 
     renderFinanceSec() {
-        const s = Finance.getSummary();
+        const s = Finance.getSummary(this._finYear, this._finMonth);
         const fmt = Finance.fmt;
 
         const balEl = document.getElementById('fin-balance');
@@ -653,9 +674,26 @@ class App {
         if (incEl) incEl.textContent = fmt(s.income);
         if (expEl) expEl.textContent = fmt(s.expenses);
 
+        const lbl = document.getElementById('fin-month-lbl');
+        if (lbl) lbl.textContent = `${MONTHS_PT[this._finMonth - 1]} ${this._finYear}`;
+
         this._renderTxList();
         this.renderFinanceCard();
         this._renderFinChart(s);
+    }
+
+    finPrevMonth() {
+        if (this._finMonth === 1) { this._finMonth = 12; this._finYear--; }
+        else this._finMonth--;
+        this.renderFinanceSec();
+    }
+
+    finNextMonth() {
+        const now = new Date();
+        if (this._finYear === now.getFullYear() && this._finMonth === now.getMonth() + 1) return;
+        if (this._finMonth === 12) { this._finMonth = 1; this._finYear++; }
+        else this._finMonth++;
+        this.renderFinanceSec();
     }
 
     _renderFinChart(s) {
@@ -747,8 +785,7 @@ class App {
     _renderTxList() {
         const list = document.getElementById('fin-tx-list');
         if (!list) return;
-        const now = new Date();
-        let txs = Finance.getMonth(now.getFullYear(), now.getMonth() + 1);
+        let txs = Finance.getMonth(this._finYear, this._finMonth);
         if (this._txFilter !== 'all') txs = txs.filter(t => t.type === this._txFilter);
 
         if (!txs.length) {
@@ -1199,6 +1236,7 @@ class App {
                     if (s.mode === 'work') {
                         this._pomoSessions++;
                         UI.toast(`🍅 Pomodoro ${this._pomoSessions} completo!`, 'ok');
+                        this._pomoBeep();
                         if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 400]);
                         Pomodoro.reset('short');
                         Pomodoro.state.total = this._pomoBreakMin * 60;
@@ -1237,6 +1275,25 @@ class App {
         if (btn) btn.textContent = 'INICIAR';
         const lbl = document.getElementById('pomo-mode-label');
         if (lbl) lbl.textContent = 'TRABALHO';
+    }
+
+    _pomoBeep() {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const freqs = [880, 1100, 1320];
+            freqs.forEach((freq, i) => {
+                const o = ctx.createOscillator();
+                const g = ctx.createGain();
+                o.connect(g); g.connect(ctx.destination);
+                o.type = 'sine';
+                o.frequency.value = freq;
+                const t = ctx.currentTime + i * 0.22;
+                g.gain.setValueAtTime(0.35, t);
+                g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+                o.start(t); o.stop(t + 0.18);
+            });
+            setTimeout(() => ctx.close(), 1500);
+        } catch {}
     }
 
     /* ═══════════════════════════════════════════════
@@ -2262,29 +2319,43 @@ class App {
 
         if (tab === 'id') {
             body.innerHTML = `
-                <div class="psec"><label class="plabel">Nome da IA</label><input type="text" id="s-name" value="${cfg.name}"></div>
+                <div class="psec"><label class="plabel">Nome da IA</label><input type="text" id="s-name" value="${cfg.name}">
+                <p style="font-size:11px;color:var(--text-muted);margin-top:4px">Ex: Orbit Sophy</p></div>
+                <div class="psec"><label class="plabel">Seu nome na saudação</label><input type="text" id="s-username" value="${cfg.userName || 'JR'}">
+                <p style="font-size:11px;color:var(--text-muted);margin-top:4px">Aparece no "Bom dia, ___" do dashboard</p></div>
                 <button class="btn btn-primary" onclick="orbit.saveSettings()">SALVAR</button>`;
         } else if (tab === 'ai') {
+            const groqOk = !!cfg.groqKey;
+            const gemOk = !!cfg.apiKey;
             body.innerHTML = `
-                <div class="psec"><label class="plabel">Groq API Key (primária)</label><input type="password" id="s-groq" value="${cfg.groqKey}" placeholder="gsk_...">
-                <p style="font-size:11px;color:var(--text-muted);margin-top:6px">LLaMA 3.3 70B · 14.400 req/dia</p></div>
+                <div class="psec" style="background:var(--overlay);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px">
+                <div style="font-family:var(--fm);font-size:10px;letter-spacing:1px;color:var(--text-muted);margin-bottom:8px">STATUS DO SISTEMA</div>
+                <div style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:4px">
+                    <span style="color:${groqOk?'var(--ok)':'var(--err)'}">●</span>
+                    <span>Groq ${groqOk?'configurado — primário ativo':'não configurado'}</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;font-size:13px">
+                    <span style="color:${gemOk?'var(--ok)':'var(--fg-4)'}">●</span>
+                    <span>Gemini ${gemOk?'configurado — fallback ativo':'não configurado (fallback)'}</span>
+                </div>
+                ${!groqOk&&!gemOk?'<div style="font-size:11px;color:var(--gold);margin-top:8px">⚠️ Nenhuma chave configurada. O chat não vai funcionar.</div>':''}</div>
+                <div class="psec"><label class="plabel">Groq API Key <span style="color:var(--text-muted);font-size:10px">(primária · gratuita · 14.400 req/dia)</span></label>
+                <input type="password" id="s-groq" value="${cfg.groqKey}" placeholder="gsk_...">
+                <p style="font-size:10px;color:var(--text-muted);margin-top:4px">Crie em console.groq.com → API Keys</p></div>
                 <div class="psec"><label class="plabel">Modelo Groq</label><select id="s-groq-model">
-                    <option value="llama-3.3-70b-versatile" ${cfg.groqModel==='llama-3.3-70b-versatile'?'selected':''}>LLaMA 3.3 70B Versatile</option>
-                    <option value="llama-3.1-8b-instant" ${cfg.groqModel==='llama-3.1-8b-instant'?'selected':''}>LLaMA 3.1 8B Instant</option>
+                    <option value="llama-3.3-70b-versatile" ${cfg.groqModel==='llama-3.3-70b-versatile'?'selected':''}>LLaMA 3.3 70B Versatile (recomendado)</option>
+                    <option value="llama-3.1-8b-instant" ${cfg.groqModel==='llama-3.1-8b-instant'?'selected':''}>LLaMA 3.1 8B Instant (mais rápido)</option>
                     <option value="mixtral-8x7b-32768" ${cfg.groqModel==='mixtral-8x7b-32768'?'selected':''}>Mixtral 8x7B</option>
                 </select></div>
                 <div style="height:1px;background:var(--border);margin:16px 0"></div>
-                <div class="psec"><label class="plabel">Gemini API Key (fallback)</label><input type="password" id="s-key" value="${cfg.apiKey}" placeholder="AIza..."></div>
+                <div class="psec"><label class="plabel">Gemini API Key <span style="color:var(--text-muted);font-size:10px">(fallback opcional)</span></label>
+                <input type="password" id="s-key" value="${cfg.apiKey}" placeholder="AIza...">
+                <p style="font-size:10px;color:var(--text-muted);margin-top:4px">Crie em aistudio.google.com → Get API key</p></div>
                 <div class="psec"><label class="plabel">Modelo Gemini</label><select id="s-model">
                     <option value="gemini-2.5-flash-lite" ${cfg.model==='gemini-2.5-flash-lite'?'selected':''}>Gemini 2.5 Flash Lite</option>
                     <option value="gemini-2.5-flash" ${cfg.model==='gemini-2.5-flash'?'selected':''}>Gemini 2.5 Flash</option>
                 </select></div>
-                <button class="btn btn-primary" onclick="orbit.saveSettings()">SALVAR</button>
-                <div class="psec" style="margin-top:16px"><label class="plabel">STATUS</label>
-                <div style="font-family:var(--fm);font-size:12px;color:var(--text-sec)">
-                    ${cfg.groqKey ? '● Groq configurado' : '○ Groq não configurado'}<br>
-                    ${cfg.apiKey ? '● Gemini configurado' : '○ Gemini não configurado'}
-                </div></div>`;
+                <button class="btn btn-primary" onclick="orbit.saveSettings()">SALVAR CONFIGURAÇÕES</button>`;
         } else if (tab === 'mem') {
             const ep = Store.getEp();
             body.innerHTML = `
@@ -2367,7 +2438,7 @@ class App {
     /* ── ACTIONS ── */
     saveSettings() {
         const cfg = Store.getCfg();
-        const fields = { 's-name': 'name', 's-key': 'apiKey', 's-groq': 'groqKey', 's-model': 'model', 's-groq-model': 'groqModel', 's-prompt': 'prompt' };
+        const fields = { 's-name': 'name', 's-username': 'userName', 's-key': 'apiKey', 's-groq': 'groqKey', 's-model': 'model', 's-groq-model': 'groqModel', 's-prompt': 'prompt' };
         Object.entries(fields).forEach(([id, key]) => {
             const el = document.getElementById(id);
             if (el && el.value.trim()) cfg[key] = el.value.trim();
@@ -2436,6 +2507,8 @@ class App {
             nupi_proj: Store.get('orbit_nupi_proj', []),
             nupi_tasks: Store.get('orbit_nupi_tasks', []),
             fe_prayers: Store.get('orbit_fe_prayers', []),
+            vault_enc: localStorage.getItem('orbit_vault_data'),
+            vault_chk: localStorage.getItem('orbit_vault_check'),
         };
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const a = document.createElement('a');
@@ -2473,6 +2546,8 @@ class App {
                 if (d.nupi_proj) Store.set('orbit_nupi_proj', d.nupi_proj);
                 if (d.nupi_tasks) Store.set('orbit_nupi_tasks', d.nupi_tasks);
                 if (d.fe_prayers) Store.set('orbit_fe_prayers', d.fe_prayers);
+                if (d.vault_enc) localStorage.setItem('orbit_vault_data', d.vault_enc);
+                if (d.vault_chk) localStorage.setItem('orbit_vault_check', d.vault_chk);
                 UI.toast('Backup importado! Recarregando...', 'ok');
                 setTimeout(() => location.reload(), 1200);
             } catch { UI.toast('Arquivo inválido.', 'err'); }

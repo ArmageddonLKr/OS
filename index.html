@@ -218,6 +218,11 @@
         </div>
         <!-- Finanças -->
         <div id="cofre-fin" class="mod-section">
+            <div class="fin-month-nav">
+                <button class="mod-nav-btn" onclick="orbit.finPrevMonth()">‹</button>
+                <span id="fin-month-lbl" class="fin-month-lbl">Carregando...</span>
+                <button class="mod-nav-btn" onclick="orbit.finNextMonth()">›</button>
+            </div>
             <div class="fin-chart-wrap"><canvas id="fin-chart"></canvas></div>
             <div class="fin-bal-cards">
                 <div class="fin-bal-card">
