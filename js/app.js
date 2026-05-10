@@ -2335,7 +2335,12 @@ class App {
                 </div></div>`;
         } else if (tab === 'sys') {
             body.innerHTML = `
-                <button class="btn btn-ghost" onclick="orbit.exportBkp()">EXPORTAR BACKUP JSON</button>
+                <div class="psec"><label class="plabel">Backup de Dados</label>
+                <p style="font-size:11px;color:var(--text-muted);margin-bottom:10px">Exporta tudo: finanças, agenda, hábitos, cards, fé, PS5, kanban.</p>
+                <div style="display:flex;gap:8px">
+                <button class="btn btn-ghost" style="margin:0;flex:1" onclick="orbit.exportBkp()">EXPORTAR</button>
+                <button class="btn btn-ghost" style="margin:0;flex:1" onclick="orbit.importBkp()">IMPORTAR</button>
+                </div></div>
                 <button class="btn btn-ghost" onclick="orbit.resetPin()">TROCAR PIN</button>
                 <div style="height:1px;background:var(--border);margin:16px 0"></div>
                 <div class="psec"><label class="plabel">Prompt do Sistema</label>
@@ -2421,7 +2426,16 @@ class App {
             config: { ...Store.getCfg(), apiKey: '', groqKey: '' },
             ep: Store.getEp(), nuc: Store.getNuc(),
             disc: University.get(), flash: Flashcards.get(),
-            fe: Faith.getJournal(), ideas: IdeaVault.get()
+            fe: Faith.getJournal(), ideas: IdeaVault.get(),
+            finance_tx: Finance.getAll(),
+            agenda: Agenda.getEvents(),
+            habits: Habits.getAll(),
+            kanban: Kanban.get(),
+            ps5: Entertainment.getPS5Games(),
+            grades: Grades.get(),
+            nupi_proj: Store.get('orbit_nupi_proj', []),
+            nupi_tasks: Store.get('orbit_nupi_tasks', []),
+            fe_prayers: Store.get('orbit_fe_prayers', []),
         };
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const a = document.createElement('a');
@@ -2429,7 +2443,41 @@ class App {
         a.download = `orbit-backup-${new Date().toISOString().slice(0, 10)}.json`;
         a.click();
         URL.revokeObjectURL(a.href);
-        UI.toast('Backup exportado!', 'ok');
+        UI.toast('Backup completo exportado!', 'ok');
+    }
+
+    importBkp() {
+        const inp = document.createElement('input');
+        inp.type = 'file';
+        inp.accept = '.json';
+        inp.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            try {
+                const text = await file.text();
+                const d = JSON.parse(text);
+                if (!confirm(`Importar backup de ${file.name}?\nDados atuais serão substituídos.`)) return;
+                if (d.config) { const cfg = { ...Store.getCfg(), ...d.config }; Store.saveCfg(cfg); }
+                if (d.nuc) Store.saveNuc(d.nuc);
+                if (d.ep) Store.saveEp(d.ep);
+                if (d.disc) Store.set('orbit_disc', d.disc);
+                if (d.flash) Store.set('orbit_flash', d.flash);
+                if (d.fe) Store.set('orbit_fe_journal', d.fe);
+                if (d.ideas) Store.set('orbit_ideas', d.ideas);
+                if (d.finance_tx) Store.set('orbit_finance_tx', d.finance_tx);
+                if (d.agenda) Store.set('orbit_agenda_events', d.agenda);
+                if (d.habits) Store.set('orbit_habits', d.habits);
+                if (d.kanban) Store.set('orbit_kanban', d.kanban);
+                if (d.ps5) Store.set('orbit_ps5', d.ps5);
+                if (d.grades) Store.set('orbit_grades', d.grades);
+                if (d.nupi_proj) Store.set('orbit_nupi_proj', d.nupi_proj);
+                if (d.nupi_tasks) Store.set('orbit_nupi_tasks', d.nupi_tasks);
+                if (d.fe_prayers) Store.set('orbit_fe_prayers', d.fe_prayers);
+                UI.toast('Backup importado! Recarregando...', 'ok');
+                setTimeout(() => location.reload(), 1200);
+            } catch { UI.toast('Arquivo inválido.', 'err'); }
+        };
+        inp.click();
     }
 
     resetPin() {
