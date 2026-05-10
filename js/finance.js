@@ -71,10 +71,13 @@ export class Finance {
 
     static byCategory(txs) {
         const map = {};
-        txs.filter(t => t.type === 'expense').forEach(t => {
+        txs.forEach(t => {
             const cat = t.cat || 'other';
             map[cat] = (map[cat] || 0) + (t.amount || 0);
         });
-        return Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 5);
+        return Object.entries(map)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 6)
+            .map(([id, total]) => ({ id, name: this.catInfo(id).name, total }));
     }
 }

@@ -3,7 +3,7 @@
  */
 import { Store } from './store.js';
 
-const F1_BASE = 'https://ergast.com/api/f1';
+const F1_BASE = 'https://api.jolpi.ca/ergast/f1';
 const FLAMENGO_ID = '133';
 const TTL = 30 * 60 * 1000;
 
@@ -79,13 +79,7 @@ export class Entertainment {
     }
 
     static getPS5Games() {
-        return Store.get('orbit_ps5', [
-            { id: '1', title: 'Cyberpunk 2077',    status: 'jogando',   cover: '🌆' },
-            { id: '2', title: 'Ghost of Tsushima', status: 'platinado', cover: '⛩️' },
-            { id: '3', title: 'Spider-Man',        status: 'zerado',    cover: '🕷️' },
-            { id: '4', title: 'Spider-Man 2',      status: 'wishlist',  cover: '🕸️' },
-            { id: '5', title: 'Elden Ring',        status: 'wishlist',  cover: '⚔️' },
-        ]);
+        return Store.get('orbit_ps5', []);
     }
 
     static savePS5Games(games) { Store.set('orbit_ps5', games); }
