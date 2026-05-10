@@ -2167,7 +2167,7 @@ class App {
 
     exportChat() {
         const rows = document.querySelectorAll('.msg-row');
-        let out = `ORBIT SOPHY — Conversa exportada em ${new Date().toLocaleString('pt-BR')}\n${'='.repeat(50)}\n\n`;
+        let out = `OS — Conversa exportada em ${new Date().toLocaleString('pt-BR')}\n${'='.repeat(50)}\n\n`;
         rows.forEach(row => {
             const isUser = row.classList.contains('user');
             const txt = row.querySelector('.m-content')?.innerText || '';
@@ -2259,7 +2259,7 @@ class App {
         const txt = row.querySelector('.m-content')?.innerText || '';
         this.hideMsgCtx();
         if (navigator.share) {
-            navigator.share({ title: 'Orbit Sophy', text: txt }).catch(() => {});
+            navigator.share({ title: 'OS', text: txt }).catch(() => {});
         } else {
             navigator.clipboard.writeText(txt).then(() => UI.toast('Copiado!', 'ok')).catch(() => {});
         }
@@ -2320,7 +2320,7 @@ class App {
         if (tab === 'id') {
             body.innerHTML = `
                 <div class="psec"><label class="plabel">Nome da IA</label><input type="text" id="s-name" value="${cfg.name}">
-                <p style="font-size:11px;color:var(--text-muted);margin-top:4px">Ex: Orbit Sophy</p></div>
+                <p style="font-size:11px;color:var(--text-muted);margin-top:4px">Ex: OS</p></div>
                 <div class="psec"><label class="plabel">Seu nome na saudação</label><input type="text" id="s-username" value="${cfg.userName || 'JR'}">
                 <p style="font-size:11px;color:var(--text-muted);margin-top:4px">Aparece no "Bom dia, ___" do dashboard</p></div>
                 <button class="btn btn-primary" onclick="orbit.saveSettings()">SALVAR</button>`;

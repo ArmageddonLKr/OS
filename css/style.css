@@ -55,15 +55,15 @@
   --fg-4: rgba(255,255,255,0.34);
   --fg-5: rgba(255,255,255,0.18);
 
-  /* ── Accents ── */
-  --gold:       #c9982a;
-  --gold-soft:  rgba(201,152,42,0.16);
-  --gold-line:  rgba(201,152,42,0.42);
-  --gold-hi:    #e2b240;
+  /* ── Accents — monochrome ── */
+  --gold:       #d4d4d4;
+  --gold-soft:  rgba(255,255,255,0.07);
+  --gold-line:  rgba(255,255,255,0.18);
+  --gold-hi:    #ffffff;
 
-  --steel:      #4a9eff;
-  --steel-soft: rgba(74,158,255,0.14);
-  --steel-line: rgba(74,158,255,0.36);
+  --steel:      #888888;
+  --steel-soft: rgba(255,255,255,0.05);
+  --steel-line: rgba(255,255,255,0.12);
 
   /* ── Semânticas ── */
   --ok:       #4ad08a;
@@ -75,8 +75,8 @@
   --shadow-1: 0 1px 0 0 rgba(255,255,255,0.04) inset;
   --shadow-2: 0 8px 24px rgba(0,0,0,0.6);
   --shadow-3: 0 24px 60px rgba(0,0,0,0.85);
-  --glow-gold:  0 0 0 1px var(--gold-line), 0 0 18px rgba(201,152,42,0.18);
-  --glow-steel: 0 0 0 1px var(--steel-line), 0 0 14px rgba(74,158,255,0.16);
+  --glow-gold:  0 0 0 1px rgba(255,255,255,0.14), 0 0 18px rgba(255,255,255,0.06);
+  --glow-steel: 0 0 0 1px rgba(255,255,255,0.10), 0 0 14px rgba(255,255,255,0.04);
 
   /* ── Raios ── */
   --r-xs:  4px;
@@ -143,7 +143,7 @@
   --info:       var(--steel);
   --finance:    var(--ok);
   --academia:   var(--steel);
-  --health:     #a78bfa;
+  --health:     rgba(255,255,255,0.48);
   --faith:      var(--gold);
   --bg:         var(--bg-0);
   --bg2:        var(--bg-2);
@@ -154,8 +154,8 @@
   --accent:     var(--fg-1);
   --adim:       var(--line-1);
   --dimtext:    var(--fg-3);
-  --usr:        #050514;
-  --usrb:       #08081e;
+  --usr:        #050505;
+  --usrb:       #080808;
   --shadow-p:   0 8px 40px rgba(0,0,0,0.9);
 
   /* ── Shorthands layout ── */
@@ -198,35 +198,35 @@ body {
 }
 .aurora-orb.a1 {
   width: 80vw; height: 80vw;
-  background: radial-gradient(circle, rgba(201,152,42,0.55) 0%, transparent 65%);
+  background: radial-gradient(circle, rgba(255,255,255,0.09) 0%, transparent 65%);
   top: -35%; left: -25%;
   animation: aur1 32s ease-in-out infinite;
 }
 .aurora-orb.a2 {
   width: 65vw; height: 65vw;
-  background: radial-gradient(circle, rgba(74,158,255,0.42) 0%, transparent 65%);
+  background: radial-gradient(circle, rgba(255,255,255,0.06) 0%, transparent 65%);
   bottom: -25%; right: -20%;
   animation: aur2 40s ease-in-out infinite;
 }
 .aurora-orb.a3 {
   width: 50vw; height: 50vw;
-  background: radial-gradient(circle, rgba(167,139,250,0.32) 0%, transparent 65%);
+  background: radial-gradient(circle, rgba(255,255,255,0.04) 0%, transparent 65%);
   top: 50%; left: 40%;
   animation: aur3 28s ease-in-out infinite;
 }
 @keyframes aur1 {
-  0%,100% { opacity:.07; transform:translate(0,0) scale(1); }
-  33%     { opacity:.13; transform:translate(12vw,-8vh) scale(1.1); }
-  66%     { opacity:.08; transform:translate(-6vw,14vh) scale(.93); }
+  0%,100% { opacity:.04; transform:translate(0,0) scale(1); }
+  33%     { opacity:.08; transform:translate(12vw,-8vh) scale(1.1); }
+  66%     { opacity:.04; transform:translate(-6vw,14vh) scale(.93); }
 }
 @keyframes aur2 {
-  0%,100% { opacity:.06; transform:translate(0,0) scale(1); }
-  40%     { opacity:.11; transform:translate(-14vw,-10vh) scale(1.08); }
-  75%     { opacity:.07; transform:translate(7vw,11vh) scale(.94); }
+  0%,100% { opacity:.03; transform:translate(0,0) scale(1); }
+  40%     { opacity:.07; transform:translate(-14vw,-10vh) scale(1.08); }
+  75%     { opacity:.03; transform:translate(7vw,11vh) scale(.94); }
 }
 @keyframes aur3 {
-  0%,100% { opacity:.05; transform:translate(-50%,-50%) scale(1) rotate(0deg); }
-  50%     { opacity:.10; transform:translate(-50%,-50%) scale(1.18) rotate(35deg); }
+  0%,100% { opacity:.03; transform:translate(-50%,-50%) scale(1) rotate(0deg); }
+  50%     { opacity:.06; transform:translate(-50%,-50%) scale(1.18) rotate(35deg); }
 }
 
 /* ── CÂMBIO CARD ── */
@@ -262,6 +262,7 @@ body {
 
 /* ── PIN SCREEN ──────────────────────────────────── */
 #pinscreen {
+  display: none; /* boot() exibe após definir texto correto */
   align-items: center;
   justify-content: center;
   padding: 32px 24px calc(32px + env(safe-area-inset-bottom, 0px));

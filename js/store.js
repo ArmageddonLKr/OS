@@ -94,7 +94,7 @@ const DFLT = {
     groqKey:   '',
     model:     'gemini-2.5-flash-lite',
     groqModel: 'llama-3.3-70b-versatile',
-    name:      'Orbit Sophy',
+    name:      'OS',
     userName:  'JR',
     maxEp:     15,
     autoSave:  true,
