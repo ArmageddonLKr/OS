@@ -67,6 +67,17 @@ export class UI {
     static renderMd(t) {
         if (!t) return '';
 
+        // Step 0: extract math blocks before any escaping
+        const mathBlocks = [];
+        t = t.replace(/\$\$([^$]+)\$\$/g, (_, expr) => {
+            mathBlocks.push({ expr: expr.trim(), block: true });
+            return `\x00MATH${mathBlocks.length - 1}\x00`;
+        });
+        t = t.replace(/\$([^$\n]+)\$/g, (_, expr) => {
+            mathBlocks.push({ expr: expr.trim(), block: false });
+            return `\x00MATH${mathBlocks.length - 1}\x00`;
+        });
+
         // Step 1: extract fenced code blocks before any escaping
         const blocks = [];
         t = t.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
@@ -110,6 +121,17 @@ export class UI {
             }
             const langLabel = lang ? `<span class="code-lang">${lang}</span>` : '';
             return `<div class="code-wrap">${langLabel}<button class="copy-btn" onclick="UI.copyCode(this)">${Icons.copy}</button><pre><code class="hljs">${hl}</code></pre></div>`;
+        });
+
+        // Step 5: restore math with KaTeX
+        t = t.replace(/\x00MATH(\d+)\x00/g, (_, i) => {
+            const { expr, block } = mathBlocks[+i];
+            if (!window.katex) return block ? `<pre class="math">${expr}</pre>` : `<code>${expr}</code>`;
+            try {
+                return katex.renderToString(expr, { displayMode: block, throwOnError: false });
+            } catch (_) {
+                return block ? `<pre class="math">${expr}</pre>` : `<code>${expr}</code>`;
+            }
         });
 
         return t;
@@ -161,7 +183,7 @@ export class Orb {
                     vec2 p = uv + vec2(sin(t), cos(t)) * 0.3;
                     m += 0.05 / length(p);
                 }
-                vec3 col = mix(vec3(0.42, 0.12, 0.94), vec3(0.72, 0.63, 1.0), m * 0.5 + 0.5 * sin(time * 0.5));
+                vec3 col = mix(vec3(0.79, 0.60, 0.16), vec3(1.0, 0.98, 0.92), m * 0.5 + 0.5 * sin(time * 0.5));
                 gl_FragColor = vec4(col * m * (1.0 - d * 0.8) * 0.15, 1.0);
             }
         `;

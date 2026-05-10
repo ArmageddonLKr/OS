@@ -10,6 +10,7 @@ const GROQ_MODEL = 'llama-3.3-70b-versatile';
 
 export class AI {
     static _stressHint = '';
+    static _faithVerse = null;
 
     static nowBR() {
         return new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Fortaleza' }));
@@ -55,7 +56,16 @@ export class AI {
         return ctx;
     }
 
-    static buildSys() {
+    static _detectTopics(msgs = []) {
+        const lastUser = [...msgs].reverse().find(m => m.role === 'user');
+        const txt = (lastUser?.content || '').toLowerCase();
+        return {
+            faith: /\b(fé|fe|deus|jesus|cristo|bíblia|biblia|oração|oracao|versículo|versiculo|salmo|evangelho|igreja|culto|espírito|espirito|graça|graca)\b/.test(txt),
+            study: /\b(estudo|estudar|prova|concurso|vestibular|matéria|materia|resumo|revisão|revisao|questão|questao|exercício|exercicio|dificuldade|aprender)\b/.test(txt)
+        };
+    }
+
+    static buildSys(msgs = []) {
         const c = Store.getCfg();
         const now = this.nowBR();
         const dtBR = now.toLocaleString('pt-BR', { dateStyle: 'full', timeStyle: 'short' });
@@ -70,8 +80,17 @@ export class AI {
             ? '\n\n## MEMORIA EPISODICA\n' + epArr.slice(-8).map(e => `[${e.d}]: ${e.s}`).join('\n')
             : '';
 
+        const topics = this._detectTopics(msgs);
+        let contextExtra = '';
+        if (topics.faith && this._faithVerse) {
+            contextExtra += `\n\n## CONTEXTO DE FÉ\nVersículo do dia: "${this._faithVerse}"\nSe pertinente, mencione com naturalidade.`;
+        }
+        if (topics.study) {
+            contextExtra += '\n\n## MODO ESTUDO\nO usuário está estudando. Seja didático, use exemplos concretos, estruture bem as explicações.';
+        }
+
         const sys = c.prompt || DEFAULT_PROMPT;
-        return `${sys}\n\nCONTEXTO:\nAGORA: ${dtBR}\nTOM: ${tone}${sundayNote}${this.absenceNote()}${this._stressHint}\n\n${Store.getNuc()}${epBlock}${this.agendaContext()}`;
+        return `${sys}\n\nCONTEXTO:\nAGORA: ${dtBR}\nTOM: ${tone}${sundayNote}${this.absenceNote()}${this._stressHint}\n\n${Store.getNuc()}${epBlock}${this.agendaContext()}${contextExtra}`;
     }
 
     static getWindowedMsgs(msgs) {
@@ -104,7 +123,7 @@ export class AI {
         if (!c.groqKey) throw new Error('NO_GROQ_KEY');
 
         const signal = payload.signal;
-        const sysText = payload.system || this.buildSys();
+        const sysText = payload.system || this.buildSys(payload.messages);
         const messages = [
             { role: 'system', content: sysText },
             ...payload.messages.map(m => ({
@@ -191,7 +210,7 @@ export class AI {
             merged.unshift({ role: 'user', parts: [{ text: ' ' }] });
         }
 
-        const sysText = payload.system || this.buildSys();
+        const sysText = payload.system || this.buildSys(payload.messages);
 
         const res = await fetch(url, {
             method: 'POST',

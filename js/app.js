@@ -40,6 +40,8 @@ class App {
         this._sr = null;
         this.voiceActive = false;
         this._ctxMsgId = null;
+        this._wakeLock = null;
+        this._sharedContent = null;
 
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => this.boot());
@@ -74,6 +76,15 @@ class App {
         const action = p.get('action');
         if (m === 'chat') this._pendingOpenChat = true;
         if (action === 'pomodoro') this._pendingPomodoro = true;
+
+        // Share Target (web+orbit e share_target)
+        const sharedText = p.get('text') || '';
+        const sharedUrl = p.get('url') || '';
+        const sharedTitle = p.get('title') || '';
+        if (sharedText || sharedUrl || sharedTitle) {
+            this._pendingOpenChat = true;
+            this._sharedContent = [sharedTitle, sharedText, sharedUrl].filter(Boolean).join(' ').trim();
+        }
     }
 
     /* ── PIN ── */
@@ -165,7 +176,14 @@ class App {
         history.pushState({ chat: true }, '');
         setTimeout(() => {
             const inp = document.getElementById('msginput');
-            if (inp) inp.focus();
+            if (inp) {
+                inp.focus();
+                if (this._sharedContent) {
+                    inp.value = this._sharedContent;
+                    this._sharedContent = null;
+                    this.handleInput();
+                }
+            }
         }, 350);
     }
 
@@ -319,6 +337,7 @@ class App {
     renderVerseCard() {
         const v = Faith.getVerseOfDay();
         if (!v) return;
+        AI._faithVerse = v.t;
         const ref = document.getElementById('dash-verse-ref');
         const text = document.getElementById('dash-verse-text');
         if (ref) ref.textContent = v.r;
@@ -391,6 +410,28 @@ class App {
             if (msgs) msgs.scrollTop = msgs.scrollHeight;
         }
         UI.setStatus('online');
+
+        // Pergunta do dia — apenas na primeira abertura do dia
+        const today = AI.nowBR().toISOString().slice(0, 10);
+        if (localStorage.getItem('orbit_daily_q') !== today) {
+            localStorage.setItem('orbit_daily_q', today);
+            setTimeout(() => this._askDailyQuestion(), 1800);
+        }
+    }
+
+    async _askDailyQuestion() {
+        if (this.busy) return;
+        const questions = [
+            'Como está o coração do Pai hoje?',
+            'Qual é a maior prioridade de hoje para o Senhor?',
+            'Tem algo pesando que o Senhor queira falar?',
+            'O que está te animando ultimamente?',
+            'O Senhor dormiu bem? Como está a energia hoje?',
+            'Qual o maior desafio dessa semana até agora?',
+            'Em que posso ajudar o Senhor hoje, Pai?'
+        ];
+        const q = questions[Math.floor(Math.random() * questions.length)];
+        UI.addMsg('sophy', q, false);
     }
 
     async handleSend() {
@@ -411,6 +452,23 @@ class App {
         if (text.startsWith('!ideia ')) {
             IdeaVault.add(text.slice(7));
             UI.toast('Ideia salva! 💡', 'ok');
+            inp.value = '';
+            return;
+        }
+
+        // "guarda isso"/"salva isso" → salva última resposta da Orbit na memória episódica
+        if (/\b(guarda|salva|anota|registra)\s+(isso|aquilo|esse|essa|aquele|aquela)\b/i.test(text)) {
+            const rows = [...document.querySelectorAll('.msg-row.sophy')];
+            const lastRow = rows[rows.length - 1];
+            const txt = lastRow?.querySelector('.m-content')?.innerText?.trim();
+            if (txt) {
+                const ep = Store.getEp();
+                ep.push({ d: AI.dateStrBR(), s: txt.slice(0, 250) });
+                Store.saveEp(ep);
+                UI.addMsg('sophy', 'Guardado na memória! 🧠', false);
+            } else {
+                UI.toast('Nenhuma mensagem para guardar.', 'err');
+            }
             inp.value = '';
             return;
         }
@@ -572,6 +630,7 @@ class App {
         if (vb) vb.style.display = 'flex';
         if (vbtn) vbtn.classList.add('recording');
         this.voiceActive = true;
+        this.requestWakeLock();
         try { this._sr.start(); } catch (_) {}
     }
 
@@ -581,7 +640,20 @@ class App {
         if (vb) vb.style.display = 'none';
         if (vbtn) vbtn.classList.remove('recording');
         this.voiceActive = false;
+        this.releaseWakeLock();
         try { if (this._sr) this._sr.stop(); } catch (_) {}
+    }
+
+    async requestWakeLock() {
+        if (!('wakeLock' in navigator)) return;
+        try { this._wakeLock = await navigator.wakeLock.request('screen'); } catch (_) {}
+    }
+
+    releaseWakeLock() {
+        if (this._wakeLock) {
+            this._wakeLock.release().catch(() => {});
+            this._wakeLock = null;
+        }
     }
 
     speak(text) {
@@ -1040,6 +1112,7 @@ class App {
     pomoToggle() {
         if (Pomodoro.state.running) {
             Pomodoro.stop();
+            this.releaseWakeLock();
             const btn = document.getElementById('pomo-btn');
             if (btn) btn.textContent = 'INICIAR';
         } else {
@@ -1054,9 +1127,11 @@ class App {
                 () => {
                     UI.toast('Pomodoro completo! 🍅', 'ok');
                     if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 400]);
+                    this.releaseWakeLock();
                     this.pomoReset();
                 }
             );
+            this.requestWakeLock();
             const btn = document.getElementById('pomo-btn');
             if (btn) btn.textContent = 'PAUSAR';
         }
@@ -1064,6 +1139,7 @@ class App {
 
     pomoReset() {
         Pomodoro.reset();
+        this.releaseWakeLock();
         const el = document.getElementById('pomo-time');
         if (el) el.textContent = '25:00';
         const bar = document.getElementById('pomo-bar');

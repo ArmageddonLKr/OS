@@ -1,12 +1,12 @@
 {
   "name": "Orbit Sophy",
   "short_name": "Orbit",
-  "description": "Sistema Operacional Pessoal do JR",
+  "description": "Nascida no escuro. Afiada no osso.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#000000",
-  "theme_color": "#000000",
+  "background_color": "#000008",
+  "theme_color": "#000008",
   "orientation": "portrait",
   "icons": [
     {
