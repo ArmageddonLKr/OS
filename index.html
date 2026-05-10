@@ -10,6 +10,8 @@
     <link rel="manifest" href="./manifest.json">
     <title>Orbit Sophy</title>
 
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource-variable/geist@5.1.0/index.css">
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/modules.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.10.0/styles/github-dark.min.css">
@@ -21,7 +23,7 @@
 </head>
 <body>
 
-<canvas id="bg-canvas"></canvas>
+<div id="aurora-bg"><div class="aurora-orb a1"></div><div class="aurora-orb a2"></div><div class="aurora-orb a3"></div></div>
 
 <!-- ── PIN SCREEN ──────────────────────────────────────────────── -->
 <section id="pinscreen" class="screen">
@@ -100,6 +102,17 @@
                         <div class="dfr-item"><div class="dfr-val success-color" id="dash-income">R$ 0</div><div class="dfr-label">Entradas</div></div>
                         <div class="dfr-divider"></div>
                         <div class="dfr-item"><div class="dfr-val danger-color" id="dash-expenses">R$ 0</div><div class="dfr-label">Saídas</div></div>
+                    </div>
+                </div>
+
+                <div class="dash-card" id="dash-cambio-card">
+                    <div class="dash-card-hdr">
+                        <div class="dc-left"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/><path d="M9 12h6M9 8h6M9 16h4"/></svg><span class="dc-title">CÂMBIO</span></div>
+                    </div>
+                    <div class="dash-cambio-row">
+                        <div class="cambio-item" id="dash-usd"><span class="ci-flag">🇺🇸</span><span class="ci-code">USD</span><span class="ci-val">--</span><span class="ci-pct">—</span></div>
+                        <div class="cambio-divider"></div>
+                        <div class="cambio-item" id="dash-eur"><span class="ci-flag">🇪🇺</span><span class="ci-code">EUR</span><span class="ci-val">--</span><span class="ci-pct">—</span></div>
                     </div>
                 </div>
 
@@ -205,6 +218,7 @@
         </div>
         <!-- Finanças -->
         <div id="cofre-fin" class="mod-section">
+            <div class="fin-chart-wrap"><canvas id="fin-chart"></canvas></div>
             <div class="fin-bal-cards">
                 <div class="fin-bal-card">
                     <div class="fin-bal-label">Saldo</div>
@@ -313,6 +327,7 @@
             <button class="mod-stab active" id="stab-kanban" onclick="orbit.switchHub('kanban')">Kanban</button>
             <button class="mod-stab" id="stab-habitos" onclick="orbit.switchHub('habitos')">Hábitos</button>
             <button class="mod-stab" id="stab-tools" onclick="orbit.switchHub('tools')">Tools</button>
+            <button class="mod-stab" id="stab-nupi" onclick="orbit.switchHub('nupi')">NUPIEEPRO</button>
             <button class="mod-stab" id="stab-fe" onclick="orbit.switchHub('fe')">Fé</button>
             <button class="mod-stab" id="stab-esportes" onclick="orbit.switchHub('esportes')">Esportes</button>
         </div>
@@ -384,6 +399,29 @@
                     <div class="tool-row"><input type="text" id="idea-inp" placeholder="Nova ideia..."><button class="tool-btn" onclick="orbit.addIdeaFromHub()">+</button></div>
                 </div>
             </div>
+        </div>
+
+        <!-- NUPIEEPRO -->
+        <div id="hub-nupi" class="mod-section" style="display:none">
+            <div class="sport-sec-title">🏛️ NUPIEEPRO — ASSESSORIA DE MARKETING</div>
+            <div style="padding:0 14px 8px">
+                <div class="plabel" style="margin-bottom:6px">Projetos Ativos</div>
+                <div id="nupi-proj-list"></div>
+                <div style="display:flex;gap:8px;margin-top:6px">
+                    <input type="text" id="nupi-proj-inp" placeholder="Nome do projeto">
+                    <button class="tool-btn" onclick="orbit.addNupiProject()">+</button>
+                </div>
+            </div>
+            <div class="sport-sec-title" style="margin-top:4px">📌 DEMANDAS</div>
+            <div style="padding:0 14px 8px">
+                <div id="nupi-tasks-list"></div>
+                <div style="display:flex;gap:8px;margin-top:6px">
+                    <input type="text" id="nupi-task-inp" placeholder="Nova demanda...">
+                    <button class="tool-btn" onclick="orbit.addNupiTask()">+</button>
+                </div>
+            </div>
+            <div class="sport-sec-title" style="margin-top:4px">📅 AGENDA NUPIEEPRO (hoje)</div>
+            <div id="nupi-meeting-card" class="sport-card" style="margin:0 14px 80px"></div>
         </div>
 
         <!-- Fé -->
@@ -521,6 +559,13 @@
             <option value="faith">🙏 Fé</option>
             <option value="health">💪 Saúde</option>
             <option value="other">📅 Outros</option>
+        </select>
+        <select id="evt-recurring" style="margin-top:8px">
+            <option value="none">Não repete</option>
+            <option value="daily">Todos os dias</option>
+            <option value="weekly">Toda semana (mesmo dia)</option>
+            <option value="monthly">Todo mês (mesmo dia)</option>
+            <option value="yearly">Todo ano</option>
         </select>
         <textarea id="evt-notes" rows="2" placeholder="Notas (opcional)" style="margin-top:8px"></textarea>
         <div style="display:flex;gap:8px;margin-top:12px">

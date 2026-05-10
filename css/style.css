@@ -101,8 +101,8 @@
   --d-sheet:   320ms;
 
   /* ── Tipografia ── */
-  --font-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
-  --font-body:    'Inter', system-ui, -apple-system, sans-serif;
+  --font-display: 'Geist Variable', 'Space Grotesk', system-ui, sans-serif;
+  --font-body:    'Geist Variable', 'Inter', system-ui, -apple-system, sans-serif;
   --font-mono:    'JetBrains Mono', 'SF Mono', Menlo, monospace;
 
   --t-display:  28px;
@@ -182,14 +182,67 @@ body {
   overscroll-behavior: none;
 }
 
-/* ── BG CANVAS ──────────────────────────────────── */
-#bg-canvas {
+/* ── AURORA BACKGROUND ──────────────────────────── */
+#aurora-bg {
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  opacity: 0.4;
+  overflow: hidden;
 }
+.aurora-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+  will-change: transform, opacity;
+}
+.aurora-orb.a1 {
+  width: 80vw; height: 80vw;
+  background: radial-gradient(circle, rgba(201,152,42,0.55) 0%, transparent 65%);
+  top: -35%; left: -25%;
+  animation: aur1 32s ease-in-out infinite;
+}
+.aurora-orb.a2 {
+  width: 65vw; height: 65vw;
+  background: radial-gradient(circle, rgba(74,158,255,0.42) 0%, transparent 65%);
+  bottom: -25%; right: -20%;
+  animation: aur2 40s ease-in-out infinite;
+}
+.aurora-orb.a3 {
+  width: 50vw; height: 50vw;
+  background: radial-gradient(circle, rgba(167,139,250,0.32) 0%, transparent 65%);
+  top: 50%; left: 40%;
+  animation: aur3 28s ease-in-out infinite;
+}
+@keyframes aur1 {
+  0%,100% { opacity:.07; transform:translate(0,0) scale(1); }
+  33%     { opacity:.13; transform:translate(12vw,-8vh) scale(1.1); }
+  66%     { opacity:.08; transform:translate(-6vw,14vh) scale(.93); }
+}
+@keyframes aur2 {
+  0%,100% { opacity:.06; transform:translate(0,0) scale(1); }
+  40%     { opacity:.11; transform:translate(-14vw,-10vh) scale(1.08); }
+  75%     { opacity:.07; transform:translate(7vw,11vh) scale(.94); }
+}
+@keyframes aur3 {
+  0%,100% { opacity:.05; transform:translate(-50%,-50%) scale(1) rotate(0deg); }
+  50%     { opacity:.10; transform:translate(-50%,-50%) scale(1.18) rotate(35deg); }
+}
+
+/* ── CÂMBIO CARD ── */
+.dash-cambio-row { display:flex; align-items:center; padding:4px 0; }
+.cambio-item { flex:1; display:flex; align-items:center; gap:8px; padding:6px 0; }
+.cambio-item .ci-flag { font-size:16px; }
+.cambio-item .ci-code { font-family:var(--fm); font-size:10px; color:var(--fg-4); letter-spacing:.08em; }
+.cambio-item .ci-val { font-family:var(--fm); font-size:16px; color:var(--fg-1); font-weight:600; flex:1; }
+.cambio-item .ci-pct { font-family:var(--fm); font-size:10px; letter-spacing:.04em; }
+.ci-pct.up { color:var(--ok); }
+.ci-pct.dn { color:var(--err); }
+.cambio-divider { width:1px; height:28px; background:var(--line-1); margin:0 12px; }
+
+/* ── FINANCE CHART ── */
+.fin-chart-wrap { padding:12px 14px 4px; }
+#fin-chart { width:100%; height:180px; display:block; border-radius:var(--r-md); }
 
 /* ── SCREENS ─────────────────────────────────────── */
 .screen {

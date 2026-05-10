@@ -5,7 +5,7 @@
 
 import { Store, K } from './store.js';
 import { AI } from './ai.js';
-import { UI, Orb, Icons } from './ui.js';
+import { UI, Icons } from './ui.js';
 import { Calculator, Converter, Pomodoro, DataTools } from './tools.js';
 import { Kanban, Flashcards, University, IdeaVault, Grades } from './study.js';
 import { Faith, VERSES, ACTS_PRAYERS } from './faith.js';
@@ -16,6 +16,7 @@ import { Vault } from './vault.js';
 import { Entertainment } from './entertainment.js';
 
 const WEATHER_URL = 'https://api.open-meteo.com/v1/forecast?latitude=-5.0892&longitude=-42.8019&current=temperature_2m,weathercode,windspeed_10m,relativehumidity_2m&timezone=America/Fortaleza';
+const CAMBIO_URL  = 'https://economia.awesomeapi.com.br/json/last/USD-BRL,EUR-BRL';
 
 const WMO_ICONS = {
     0: ['☀️','Céu limpo'], 1: ['🌤️','Quase limpo'], 2: ['⛅','Parcialmente nublado'],
@@ -237,6 +238,7 @@ class App {
         this.renderHabitsCard();
         this.renderVerseCard();
         this.loadWeather();
+        this.loadCambio();
         this.renderSportsCard();
     }
 
@@ -377,6 +379,35 @@ class App {
         document.getElementById('weather-icon').textContent = icon;
         document.getElementById('weather-temp').textContent = `${temp}°`;
         document.getElementById('weather-desc').textContent = desc;
+    }
+
+    async loadCambio() {
+        const cached = sessionStorage.getItem('orbit_cambio');
+        const cachedTs = parseInt(sessionStorage.getItem('orbit_cambio_ts') || '0');
+        let data;
+        if (cached && Date.now() - cachedTs < 15 * 60 * 1000) {
+            data = JSON.parse(cached);
+        } else {
+            try {
+                const res = await fetch(CAMBIO_URL);
+                if (!res.ok) throw new Error();
+                data = await res.json();
+                sessionStorage.setItem('orbit_cambio', JSON.stringify(data));
+                sessionStorage.setItem('orbit_cambio_ts', Date.now().toString());
+            } catch (_) { return; }
+        }
+        const fmt = (obj) => {
+            if (!obj) return null;
+            const val = parseFloat(obj.bid).toFixed(2).replace('.', ',');
+            const pct = parseFloat(obj.pctChange);
+            return { val: `R$ ${val}`, pct, cls: pct >= 0 ? 'up' : 'dn', txt: `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%` };
+        };
+        const usd = fmt(data?.USDBRL);
+        const eur = fmt(data?.EURBRL);
+        const usdEl = document.getElementById('dash-usd');
+        const eurEl = document.getElementById('dash-eur');
+        if (usdEl && usd) usdEl.innerHTML = `<span class="ci-flag">🇺🇸</span><span class="ci-code">USD</span><span class="ci-val">${usd.val}</span><span class="ci-pct ${usd.cls}">${usd.txt}</span>`;
+        if (eurEl && eur) eurEl.innerHTML = `<span class="ci-flag">🇪🇺</span><span class="ci-code">EUR</span><span class="ci-val">${eur.val}</span><span class="ci-pct ${eur.cls}">${eur.txt}</span>`;
     }
 
     async renderSportsCard() {
@@ -527,6 +558,8 @@ class App {
         titleInp.value = '';
         catInp.value = 'personal';
         notesInp.value = '';
+        const recInp = document.getElementById('evt-recurring');
+        if (recInp) recInp.value = 'none';
         delBtn.style.display = 'none';
         title.textContent = 'NOVO EVENTO';
 
@@ -538,6 +571,7 @@ class App {
                 timeInp.value = evt.time || '';
                 catInp.value = evt.cat || 'personal';
                 notesInp.value = evt.notes || '';
+                if (recInp) recInp.value = evt.recurring || 'none';
                 delBtn.style.display = '';
                 title.textContent = 'EDITAR EVENTO';
             }
@@ -558,15 +592,16 @@ class App {
         const time = document.getElementById('evt-time')?.value;
         const cat = document.getElementById('evt-cat')?.value;
         const notes = document.getElementById('evt-notes')?.value.trim();
+        const recurring = document.getElementById('evt-recurring')?.value || 'none';
 
         if (!title) return UI.toast('Preencha o título!', 'err');
         if (!date) return UI.toast('Escolha uma data!', 'err');
 
         if (this._editingEvtId) {
-            Agenda.update(this._editingEvtId, { title, date, time, cat, notes });
+            Agenda.update(this._editingEvtId, { title, date, time, cat, notes, recurring });
             UI.toast('Evento atualizado!', 'ok');
         } else {
-            Agenda.add({ title, date, time, cat, notes });
+            Agenda.add({ title, date, time, cat, notes, recurring });
             UI.toast('Evento adicionado!', 'ok');
         }
 
@@ -620,6 +655,93 @@ class App {
 
         this._renderTxList();
         this.renderFinanceCard();
+        this._renderFinChart(s);
+    }
+
+    _renderFinChart(s) {
+        const canvas = document.getElementById('fin-chart');
+        if (!canvas) return;
+        const byCat = Finance.byCategory((s.txs || []).filter(t => t.type === 'expense'));
+        if (!byCat.length) { canvas.style.display = 'none'; return; }
+        canvas.style.display = 'block';
+
+        const dpr = window.devicePixelRatio || 1;
+        const W = canvas.offsetWidth || 320;
+        const H = 180;
+        canvas.width = W * dpr;
+        canvas.height = H * dpr;
+        canvas.style.height = H + 'px';
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        ctx.clearRect(0, 0, W, H);
+
+        const COLORS = ['#c9982a','#4a9eff','#4ad08a','#ff5a5a','#a78bfa','#f59e0b'];
+        const cx = W * 0.27, cy = H / 2, r = Math.min(cy - 12, W * 0.22);
+        const total = byCat.reduce((a, b) => a + b.total, 0);
+        let angle = -Math.PI / 2;
+
+        byCat.slice(0, 6).forEach((cat, i) => {
+            const slice = (cat.total / total) * Math.PI * 2;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.arc(cx, cy, r, angle, angle + slice);
+            ctx.closePath();
+            ctx.fillStyle = COLORS[i % COLORS.length];
+            ctx.fill();
+            angle += slice;
+        });
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, r * 0.54, 0, Math.PI * 2);
+        ctx.fillStyle = '#080808';
+        ctx.fill();
+
+        ctx.font = `600 11px 'Geist Variable', sans-serif`;
+        ctx.textAlign = 'left';
+        const lx = W * 0.54;
+        byCat.slice(0, 5).forEach((cat, i) => {
+            const y = 22 + i * 32;
+            ctx.fillStyle = COLORS[i % COLORS.length];
+            ctx.beginPath();
+            ctx.roundRect(lx, y - 8, 8, 8, 2);
+            ctx.fill();
+            ctx.fillStyle = 'rgba(255,255,255,0.55)';
+            ctx.font = `10px 'Geist Variable', sans-serif`;
+            ctx.fillText(cat.name.slice(0, 12), lx + 12, y);
+            ctx.fillStyle = 'rgba(255,255,255,0.82)';
+            ctx.font = `600 12px 'JetBrains Mono', monospace`;
+            ctx.fillText(Finance.fmt(cat.total), lx + 12, y + 15);
+        });
+    }
+
+    _setupSwipe(el, onDelete) {
+        let startX = 0, startY = 0, dragging = false;
+        const THRESHOLD = 72;
+        el.addEventListener('touchstart', e => {
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+            dragging = false;
+        }, { passive: true });
+        el.addEventListener('touchmove', e => {
+            const dx = e.touches[0].clientX - startX;
+            const dy = Math.abs(e.touches[0].clientY - startY);
+            if (!dragging && Math.abs(dx) > 8 && dy < 18) dragging = true;
+            if (dragging && dx < 0) {
+                el.style.transform = `translateX(${Math.max(dx, -THRESHOLD * 1.6)}px)`;
+                el.style.transition = 'none';
+            }
+        }, { passive: true });
+        el.addEventListener('touchend', e => {
+            const dx = e.changedTouches[0].clientX - startX;
+            el.style.transition = 'transform .25s ease';
+            if (dragging && dx < -THRESHOLD) {
+                el.style.transform = 'translateX(-110%)';
+                el.style.opacity = '0';
+                setTimeout(onDelete, 250);
+            } else {
+                el.style.transform = 'translateX(0)';
+            }
+        });
     }
 
     _renderTxList() {
@@ -634,18 +756,22 @@ class App {
             return;
         }
 
-        list.innerHTML = txs.map(t => {
+        list.innerHTML = '';
+        txs.forEach(t => {
             const cat = Finance.catInfo(t.cat);
             const isIncome = t.type === 'income';
-            return `<div class="tx-item" onclick="orbit._deleteTxPrompt('${t.id}')">
+            const div = document.createElement('div');
+            div.className = 'tx-item';
+            div.innerHTML = `
                 <div class="tx-icon">${cat.icon}</div>
                 <div class="tx-body">
                     <div class="tx-desc">${t.desc || cat.name}</div>
                     <div class="tx-meta">${cat.name} · ${t.date || ''}</div>
                 </div>
-                <div class="tx-amount ${t.type}">${isIncome ? '+' : '-'}${Finance.fmt(t.amount)}</div>
-            </div>`;
-        }).join('');
+                <div class="tx-amount ${t.type}">${isIncome ? '+' : '-'}${Finance.fmt(t.amount)}</div>`;
+            this._setupSwipe(div, () => { Finance.remove(t.id); this.renderFinanceSec(); UI.toast('Removido.', 'ok'); });
+            list.appendChild(div);
+        });
     }
 
     _deleteTxPrompt(id) {
@@ -1125,7 +1251,7 @@ class App {
         document.querySelectorAll('#tab-hub .mod-stab').forEach(b => b.classList.remove('active'));
         document.getElementById(`stab-${sec}`)?.classList.add('active');
 
-        const sections = ['kanban','habitos','tools','fe','esportes'];
+        const sections = ['kanban','habitos','tools','nupi','fe','esportes'];
         sections.forEach(s => {
             const el = document.getElementById(`hub-${s}`);
             if (el) el.style.display = s === sec ? '' : 'none';
@@ -1134,8 +1260,101 @@ class App {
         if (sec === 'kanban') this.renderHubKanban();
         else if (sec === 'habitos') this.renderHubHabitos();
         else if (sec === 'tools') this.renderHubTools();
+        else if (sec === 'nupi') this.renderHubNupi();
         else if (sec === 'fe') this.renderHubFe();
         else if (sec === 'esportes') this.renderHubEsportes();
+    }
+
+    renderHubNupi() {
+        const nupi = Store.get('orbit_nupi', { projects: [], tasks: [] });
+        const STATUS_COLORS = { ativo: 'nupi-status-ativo', pausado: 'nupi-status-pausado', concluido: 'nupi-status-concluido' };
+
+        const projList = document.getElementById('nupi-proj-list');
+        if (projList) {
+            projList.innerHTML = !nupi.projects.length
+                ? '<div class="fin-empty" style="padding:8px 0">Nenhum projeto cadastrado.</div>'
+                : nupi.projects.map(p => `
+                    <div class="nupi-proj-item">
+                        <span class="nupi-proj-name">${p.name}</span>
+                        <button class="nupi-proj-status ${STATUS_COLORS[p.status] || 'nupi-status-ativo'}" onclick="orbit.cycleNupiStatus('${p.id}')">${p.status}</button>
+                        <button class="nupi-proj-del" onclick="orbit.delNupiProject('${p.id}')">×</button>
+                    </div>`).join('');
+        }
+
+        const taskList = document.getElementById('nupi-tasks-list');
+        if (taskList) {
+            taskList.innerHTML = !nupi.tasks.length
+                ? '<div class="fin-empty" style="padding:8px 0">Nenhuma demanda pendente.</div>'
+                : nupi.tasks.map(t => `
+                    <div class="nupi-task-item">
+                        <div class="nupi-task-check ${t.done ? 'done' : ''}" onclick="orbit.toggleNupiTask('${t.id}')">${t.done ? '✓' : ''}</div>
+                        <span class="nupi-task-text ${t.done ? 'done' : ''}">${t.text}</span>
+                        <button class="nupi-task-del" onclick="orbit.delNupiTask('${t.id}')">×</button>
+                    </div>`).join('');
+        }
+
+        const meetCard = document.getElementById('nupi-meeting-card');
+        if (meetCard) {
+            const today = new Date().toISOString().slice(0, 10);
+            const events = Agenda.getForDate(today).filter(e => e.cat === 'nupi');
+            meetCard.innerHTML = events.length
+                ? events.map(e => `<div class="f1-next-name">${e.title}</div><div class="f1-next-circuit">${e.time || 'Dia todo'}</div>`).join('')
+                : '<div style="font-size:13px;color:var(--fg-4)">Nenhuma reunião agendada hoje.</div>';
+        }
+    }
+
+    addNupiProject() {
+        const inp = document.getElementById('nupi-proj-inp');
+        if (!inp?.value.trim()) return UI.toast('Informe o nome!', 'err');
+        const nupi = Store.get('orbit_nupi', { projects: [], tasks: [] });
+        nupi.projects.push({ id: Date.now().toString(), name: inp.value.trim(), status: 'ativo' });
+        Store.set('orbit_nupi', nupi);
+        inp.value = '';
+        this.renderHubNupi();
+        UI.toast('Projeto adicionado!', 'ok');
+    }
+
+    delNupiProject(id) {
+        const nupi = Store.get('orbit_nupi', { projects: [], tasks: [] });
+        nupi.projects = nupi.projects.filter(p => p.id !== id);
+        Store.set('orbit_nupi', nupi);
+        this.renderHubNupi();
+    }
+
+    cycleNupiStatus(id) {
+        const statuses = ['ativo', 'pausado', 'concluido'];
+        const nupi = Store.get('orbit_nupi', { projects: [], tasks: [] });
+        const proj = nupi.projects.find(p => p.id === id);
+        if (!proj) return;
+        proj.status = statuses[(statuses.indexOf(proj.status) + 1) % statuses.length];
+        Store.set('orbit_nupi', nupi);
+        this.renderHubNupi();
+    }
+
+    addNupiTask() {
+        const inp = document.getElementById('nupi-task-inp');
+        if (!inp?.value.trim()) return UI.toast('Escreva a demanda!', 'err');
+        const nupi = Store.get('orbit_nupi', { projects: [], tasks: [] });
+        nupi.tasks.push({ id: Date.now().toString(), text: inp.value.trim(), done: false });
+        Store.set('orbit_nupi', nupi);
+        inp.value = '';
+        this.renderHubNupi();
+        UI.toast('Demanda adicionada!', 'ok');
+    }
+
+    toggleNupiTask(id) {
+        const nupi = Store.get('orbit_nupi', { projects: [], tasks: [] });
+        const task = nupi.tasks.find(t => t.id === id);
+        if (task) { task.done = !task.done; if (navigator.vibrate) navigator.vibrate(30); }
+        Store.set('orbit_nupi', nupi);
+        this.renderHubNupi();
+    }
+
+    delNupiTask(id) {
+        const nupi = Store.get('orbit_nupi', { projects: [], tasks: [] });
+        nupi.tasks = nupi.tasks.filter(t => t.id !== id);
+        Store.set('orbit_nupi', nupi);
+        this.renderHubNupi();
     }
 
     renderHubKanban() {
@@ -2315,9 +2534,7 @@ class App {
     }
 
     initOrb() {
-        const canvas = document.getElementById('bg-canvas');
-        if (!canvas) return;
-        try { new Orb('bg-canvas').draw(); } catch (_) {}
+        // Aurora CSS substitui o WebGL — nenhuma inicialização necessária
     }
 
     initPWA() {

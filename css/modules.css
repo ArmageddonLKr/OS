@@ -253,6 +253,20 @@
 .idea-item-hub { display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line-1); font-size: 12px; color: var(--fg-2); }
 .idea-del { background: none; border: none; color: var(--err); cursor: pointer; font-size: 16px; padding: 0 2px; margin-left: auto; line-height: 1; }
 
+/* ── NUPIEEPRO ── */
+.nupi-proj-item { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--line-1); }
+.nupi-proj-name { flex:1; font-size:13px; color:var(--fg-1); }
+.nupi-proj-status { font-family:var(--fm); font-size:9px; letter-spacing:.08em; padding:3px 9px; border-radius:var(--r-pill); border:1px solid; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+.nupi-status-ativo { color:var(--ok); border-color:rgba(74,208,138,.3); }
+.nupi-status-pausado { color:var(--warn); border-color:rgba(217,162,58,.3); }
+.nupi-status-concluido { color:var(--fg-4); border-color:var(--line-1); }
+.nupi-proj-del, .nupi-task-del { background:none; border:none; color:var(--err); cursor:pointer; font-size:18px; padding:0 2px; opacity:.6; line-height:1; }
+.nupi-task-item { display:flex; align-items:flex-start; gap:10px; padding:10px 0; border-bottom:1px solid var(--line-1); }
+.nupi-task-check { width:20px; height:20px; border-radius:5px; border:1.5px solid var(--line-2); flex-shrink:0; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:12px; transition:all .15s; -webkit-tap-highlight-color:transparent; margin-top:1px; }
+.nupi-task-check.done { background:var(--ok); border-color:var(--ok); color:var(--bg-0); }
+.nupi-task-text { flex:1; font-size:13px; color:var(--fg-2); line-height:1.45; }
+.nupi-task-text.done { text-decoration:line-through; color:var(--fg-4); }
+
 /* ── BOTTOM SHEET MODAL ── */
 .bottom-sheet { position: fixed; inset: 0; z-index: 999; display: flex; flex-direction: column; justify-content: flex-end; }
 .bs-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.7); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }

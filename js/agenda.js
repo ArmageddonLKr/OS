@@ -38,13 +38,28 @@ export class Agenda {
     static getForDate(dateStr) {
         const disc = Store.get('orbit_disc', []);
         const [y, m, d] = dateStr.split('-').map(Number);
-        const dow = new Date(y, m - 1, d).getDay();
+        const date = new Date(y, m - 1, d);
+        const dow = date.getDay();
+        const dom = date.getDate();
 
         const classes = disc
             .filter(di => di.days && di.days.includes(dow))
             .map(di => ({ id: 'disc_' + di.id, title: di.name, cat: 'ufpi', time: di.time || '', disc: true, professor: di.professor || '' }));
 
-        const events = this.getEvents().filter(e => e.date === dateStr);
+        const allEvents = this.getEvents();
+        const events = allEvents.filter(e => {
+            if (e.date === dateStr) return true;
+            if (!e.recurring || e.recurring === 'none') return false;
+            if (e.date > dateStr) return false;
+            const [ey, em, ed] = e.date.split('-').map(Number);
+            const eDate = new Date(ey, em - 1, ed);
+            if (e.recurring === 'daily') return true;
+            if (e.recurring === 'weekly') return eDate.getDay() === dow;
+            if (e.recurring === 'monthly') return eDate.getDate() === dom;
+            if (e.recurring === 'yearly') return eDate.getMonth() === date.getMonth() && eDate.getDate() === dom;
+            return false;
+        });
+
         return [...classes, ...events].sort((a, b) => (a.time || '').localeCompare(b.time || ''));
     }
 
@@ -56,12 +71,25 @@ export class Agenda {
     static getDaysWithEvents(year, month) {
         const evts = this.getForMonth(year, month);
         const disc = Store.get('orbit_disc', []);
+        const allEvents = this.getEvents();
         const days = new Set(evts.map(e => parseInt(e.date.split('-')[2])));
 
         const daysInMonth = new Date(year, month, 0).getDate();
         for (let d = 1; d <= daysInMonth; d++) {
-            const dow = new Date(year, month - 1, d).getDay();
-            if (disc.some(di => di.days && di.days.includes(dow))) days.add(d);
+            const date = new Date(year, month - 1, d);
+            const dow = date.getDay();
+            const dom = date.getDate();
+            const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+            if (disc.some(di => di.days && di.days.includes(dow))) { days.add(d); continue; }
+            for (const e of allEvents) {
+                if (!e.recurring || e.recurring === 'none' || e.date >= dateStr) continue;
+                const [ey, em, ed] = e.date.split('-').map(Number);
+                const eDate = new Date(ey, em - 1, ed);
+                if (e.recurring === 'daily') { days.add(d); break; }
+                if (e.recurring === 'weekly' && eDate.getDay() === dow) { days.add(d); break; }
+                if (e.recurring === 'monthly' && eDate.getDate() === dom) { days.add(d); break; }
+                if (e.recurring === 'yearly' && eDate.getMonth() === date.getMonth() && eDate.getDate() === dom) { days.add(d); break; }
+            }
         }
         return days;
     }
