@@ -1,6 +1,6 @@
 /**
  * UI.JS - Rendering & Interface Logic
- * Master Class Edition
+ * Session 2: highlight.js, data-msgid, long press ctx menu
  */
 
 export const Icons = {
@@ -29,21 +29,36 @@ export class UI {
         const empty = document.getElementById('empty');
         if (empty) empty.style.display = 'none';
 
+        const msgId = `m${Date.now()}${Math.random().toString(36).slice(2,5)}`;
         const row = document.createElement('div');
         row.className = `msg-row ${role}`;
-        
-        let imgHtml = '';
-        if (image) {
-            imgHtml = `<img src="data:${image.type};base64,${image.data}" class="msg-img">`;
-        }
+        row.dataset.msgid = msgId;
+
+        const imgHtml = image
+            ? `<img src="data:${image.type};base64,${image.data}" class="msg-img">`
+            : '';
 
         row.innerHTML = `
             <div class="msg-av">${role === 'user' ? Icons.user : Icons.orb}</div>
-            <div class="mbubble ${isStatic ? 'typing' : ''}" ${isStatic ? 'id="sb"' : ''}>
+            <div class="mbubble">
                 ${imgHtml}
-                <div class="m-txt">${isStatic ? text : this.renderMd(text)}</div>
+                <div class="m-content"${isStatic ? ' id="sb"' : ''}>${isStatic ? '' : this.renderMd(text)}</div>
             </div>
         `;
+
+        // Long press → context menu (500ms)
+        let pressTimer;
+        const onDown = (e) => {
+            pressTimer = setTimeout(() => {
+                if (window.orbit) orbit.showMsgCtx(msgId, e.clientX, e.clientY);
+            }, 500);
+        };
+        const onUp = () => clearTimeout(pressTimer);
+        row.addEventListener('pointerdown', onDown);
+        row.addEventListener('pointerup', onUp);
+        row.addEventListener('pointercancel', onUp);
+        row.addEventListener('pointermove', onUp);
+
         msgs.appendChild(row);
         msgs.scrollTop = msgs.scrollHeight;
         return row;
@@ -51,27 +66,58 @@ export class UI {
 
     static renderMd(t) {
         if (!t) return '';
-        return t
-            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-            .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-            .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-            .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-            .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
-            .replace(/\*(.*)\*/gim, '<em>$1</em>')
-            .replace(/```([\s\S]*?)```/gim, (match, code) => {
-                return `<div class="code-wrap">
-                    <button class="copy-btn" onclick="UI.copyCode(this)">${Icons.copy}</button>
-                    <pre><code>${code.trim()}</code></pre>
-                </div>`;
-            })
-            .replace(/^[-*] (.*$)/gim, '<ul><li>$1</li></ul>')
-            .replace(/<\/ul>\s?<ul>/gim, '')
+
+        // Step 1: extract fenced code blocks before any escaping
+        const blocks = [];
+        t = t.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
+            const i = blocks.length;
+            blocks.push({ lang: (lang || '').trim(), code: code.trim() });
+            return `\x00BLK${i}\x00`;
+        });
+
+        // Step 2: HTML-escape the non-code text
+        t = t
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+
+        // Step 3: inline markdown + structure
+        t = t
+            .replace(/^### (.+)$/gim, '<h3>$1</h3>')
+            .replace(/^## (.+)$/gim, '<h2>$1</h2>')
+            .replace(/^# (.+)$/gim, '<h1>$1</h1>')
+            .replace(/\*\*([^*\n]+)\*\*/gim, '<strong>$1</strong>')
+            .replace(/\*([^*\n]+)\*/gim, '<em>$1</em>')
+            .replace(/`([^`]+)`/gim, '<code class="ic">$1</code>')
+            .replace(/^[-*] (.+)$/gim, '<ul><li>$1</li></ul>')
+            .replace(/<\/ul>\n?<ul>/gim, '')
             .replace(/\n/gim, '<br>');
+
+        // Step 4: restore code blocks with optional hljs highlighting
+        t = t.replace(/\x00BLK(\d+)\x00/g, (_, i) => {
+            const { lang, code } = blocks[+i];
+            let hl;
+            try {
+                if (window.hljs) {
+                    hl = (lang && hljs.getLanguage(lang))
+                        ? hljs.highlight(code, { language: lang }).value
+                        : hljs.highlightAuto(code).value;
+                } else {
+                    hl = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                }
+            } catch (_) {
+                hl = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            }
+            const langLabel = lang ? `<span class="code-lang">${lang}</span>` : '';
+            return `<div class="code-wrap">${langLabel}<button class="copy-btn" onclick="UI.copyCode(this)">${Icons.copy}</button><pre><code class="hljs">${hl}</code></pre></div>`;
+        });
+
+        return t;
     }
 
     static copyCode(btn) {
         const code = btn.nextElementSibling.innerText;
-        navigator.clipboard.writeText(code);
+        navigator.clipboard.writeText(code).catch(() => {});
         UI.toast('Copiado!', 'ok');
     }
 

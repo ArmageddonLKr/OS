@@ -1,6 +1,6 @@
 /**
  * AI.JS - Groq (primário) + Gemini (fallback) + Context Engine
- * Orbit Sophy v2
+ * Session 2: AbortSignal, retry exponencial para 429
  */
 
 import { Store, K, DEFAULT_PROMPT } from './store.js';
@@ -98,11 +98,12 @@ export class AI {
         ];
     }
 
-    /* ── GROQ (primary — OpenAI-compatible) ── */
+    /* ── GROQ (primary — OpenAI-compatible SSE) ── */
     static async streamGroq(payload, onDelta) {
         const c = Store.getCfg();
         if (!c.groqKey) throw new Error('NO_GROQ_KEY');
 
+        const signal = payload.signal;
         const sysText = payload.system || this.buildSys();
         const messages = [
             { role: 'system', content: sysText },
@@ -114,6 +115,7 @@ export class AI {
 
         const res = await fetch(GROQ_URL, {
             method: 'POST',
+            signal,
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${c.groqKey}`
@@ -162,6 +164,7 @@ export class AI {
         const c = Store.getCfg();
         if (!c.apiKey) throw new Error('API Key Gemini não configurada. Vá em Configurações → IA.');
 
+        const signal = payload.signal;
         const model = c.model || 'gemini-2.5-flash-lite';
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${c.apiKey}`;
 
@@ -179,10 +182,10 @@ export class AI {
 
         // Merge consecutive same-role
         const merged = [];
-        for (const c of contents) {
+        for (const item of contents) {
             const prev = merged[merged.length - 1];
-            if (prev && prev.role === c.role) { prev.parts.push(...c.parts); }
-            else { merged.push({ role: c.role, parts: [...c.parts] }); }
+            if (prev && prev.role === item.role) { prev.parts.push(...item.parts); }
+            else { merged.push({ role: item.role, parts: [...item.parts] }); }
         }
         if (merged.length && merged[0].role !== 'user') {
             merged.unshift({ role: 'user', parts: [{ text: ' ' }] });
@@ -192,6 +195,7 @@ export class AI {
 
         const res = await fetch(url, {
             method: 'POST',
+            signal,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 contents: merged,
@@ -234,29 +238,34 @@ export class AI {
         }
     }
 
-    /* ── PUBLIC: streamRequest — tenta Groq, fallback Gemini ── */
+    /* ── PUBLIC: streamRequest — Groq com retry, fallback Gemini ── */
     static async streamRequest(payload, onDelta) {
         const c = Store.getCfg();
 
         if (c.groqKey) {
-            try {
-                await this.streamGroq(payload, onDelta);
-                localStorage.setItem(K.last, Date.now().toString());
-                return;
-            } catch (err) {
-                if (err.message === 'NO_GROQ_KEY') {
-                    // fall through
-                } else if (err.message.includes('rate') || err.message.includes('429')) {
-                    // rate limited — fallback silently
-                } else if (!c.apiKey) {
-                    throw err; // No fallback available
+            for (let attempt = 0; attempt < 3; attempt++) {
+                try {
+                    await this.streamGroq(payload, onDelta);
+                    localStorage.setItem(K.last, Date.now().toString());
+                    return { provider: 'groq' };
+                } catch (err) {
+                    if (err.name === 'AbortError') throw err;
+
+                    const isRateLimit = err.message.includes('429') || err.message.toLowerCase().includes('rate');
+                    if (isRateLimit && attempt < 2) {
+                        // Exponential backoff: 1s, 2s
+                        await new Promise(r => setTimeout(r, Math.pow(2, attempt) * 1000));
+                        continue;
+                    }
+                    if (err.message === 'NO_GROQ_KEY' || c.apiKey) break;
+                    throw err;
                 }
-                // fallback to Gemini
             }
         }
 
         await this.streamGemini(payload, onDelta);
         localStorage.setItem(K.last, Date.now().toString());
+        return { provider: 'gemini' };
     }
 
     static async summarizeSession(msgs) {

@@ -1,6 +1,6 @@
 /**
  * APP.JS - Controller Principal
- * Orbit Sophy v2 — Navegação + Dashboard + Chat
+ * Session 2: voz, TTS, mãos-livres, cancel, palette, busca, pin, exportar, quota
  */
 
 import { Store, K } from './store.js';
@@ -10,7 +10,6 @@ import { Calculator, Pomodoro } from './tools.js';
 import { Kanban, Flashcards, University, IdeaVault } from './study.js';
 import { Faith } from './faith.js';
 
-/* ── Open-Meteo — Teresina, PI ── */
 const WEATHER_URL = 'https://api.open-meteo.com/v1/forecast?latitude=-5.0892&longitude=-42.8019&current=temperature_2m,weathercode,windspeed_10m,relativehumidity_2m&timezone=America/Fortaleza';
 
 const WMO_ICONS = {
@@ -24,6 +23,7 @@ const WMO_ICONS = {
 };
 
 const MONTHS_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const URL_RE = /https?:\/\/[^\s<>"']+/;
 
 class App {
     constructor() {
@@ -35,6 +35,11 @@ class App {
         this.pendingImage = null;
         this.fullResponse = '';
         this.chatOpen = false;
+        this.abortCtrl = null;
+        this._hf = false;
+        this._sr = null;
+        this.voiceActive = false;
+        this._ctxMsgId = null;
 
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => this.boot());
@@ -46,6 +51,7 @@ class App {
     boot() {
         this.initOrb();
         this.setupListeners();
+        this.setupVoice();
         this.fixViewport();
         this.initPWA();
         this.handleDeepLinks();
@@ -61,7 +67,7 @@ class App {
         document.getElementById('pinscreen').style.display = 'flex';
     }
 
-    /* ── DEEP LINKS ───────────────────────────────── */
+    /* ── DEEP LINKS ── */
     handleDeepLinks() {
         const p = new URLSearchParams(window.location.search);
         const m = p.get('m');
@@ -70,7 +76,7 @@ class App {
         if (action === 'pomodoro') this._pendingPomodoro = true;
     }
 
-    /* ── PIN ──────────────────────────────────────── */
+    /* ── PIN ── */
     pinKey(digit) {
         if (!digit || this.pinBuffer.length >= 4) return;
         if (navigator.vibrate) navigator.vibrate(30);
@@ -135,38 +141,28 @@ class App {
         }, 350);
     }
 
-    /* ── NAVIGATION ───────────────────────────────── */
+    /* ── NAVIGATION ── */
     switchTab(tab) {
-        // Close chat if switching away from orbit
         if (tab !== 'orbit' && this.chatOpen) this.closeChat(false);
-
         document.querySelectorAll('.tab-screen').forEach(s => s.classList.remove('active'));
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-
         const screen = document.getElementById(`tab-${tab}`);
         const btn = document.querySelector(`.nav-btn[data-tab="${tab}"]`);
         if (screen) screen.classList.add('active');
         if (btn) btn.classList.add('active');
-
         this.currentNavTab = tab;
-
         if (navigator.vibrate) navigator.vibrate(20);
     }
 
-    /* ── CHAT OPEN/CLOSE ──────────────────────────── */
+    /* ── CHAT OPEN/CLOSE ── */
     openChat() {
         const chat = document.getElementById('chat');
         const dash = document.getElementById('dashboard');
         if (!chat) return;
-
         chat.style.display = 'flex';
         dash.style.display = 'none';
         this.chatOpen = true;
-
-        // Android back button support
         history.pushState({ chat: true }, '');
-
-        // Focus input
         setTimeout(() => {
             const inp = document.getElementById('msginput');
             if (inp) inp.focus();
@@ -177,16 +173,15 @@ class App {
         const chat = document.getElementById('chat');
         const dash = document.getElementById('dashboard');
         if (!chat) return;
-
         chat.style.display = 'none';
         dash.style.display = 'flex';
         dash.style.flexDirection = 'column';
         this.chatOpen = false;
-
+        if (this.voiceActive) this.stopVoice();
         if (goBack && window.history.state?.chat) history.back();
     }
 
-    /* ── DASHBOARD ────────────────────────────────── */
+    /* ── DASHBOARD ── */
     async loadDashboard() {
         this.renderGreeting();
         this.renderMonthLabel();
@@ -207,7 +202,6 @@ class App {
 
         let greet = hr < 5 ? 'Boa madrugada, Pai' : hr < 12 ? 'Bom dia, Pai' : hr < 18 ? 'Boa tarde, Pai' : 'Boa noite, Pai';
 
-        // Special days
         if (month === 1 && day === 4) greet = '🎂 Aniversário da Orbit, Pai!';
         else if (month === 11 && day === 25) greet = '🎄 Feliz Natal, Pai';
         else if (month === 11 && day === 11) greet = '⚙️ Feliz dia do Engenheiro, Pai';
@@ -221,11 +215,9 @@ class App {
         };
 
         const dateStr = now.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' });
-
         document.getElementById('greet-line').textContent = greet;
         document.getElementById('greet-sub').textContent = subMap[dow] || dateStr;
 
-        // Update chat hint with greeting context
         const hint = document.getElementById('dcb-hint');
         if (hint) {
             const hints = ['Falar com a Orbit...', 'O que o Senhor precisa hoje?', 'Aqui estou, Pai.', 'Pronta para agir.'];
@@ -336,7 +328,7 @@ class App {
     async loadWeather() {
         const cached = sessionStorage.getItem('orbit_weather');
         const cachedTime = parseInt(sessionStorage.getItem('orbit_weather_ts') || '0');
-        const AGE = 30 * 60 * 1000; // 30 min cache
+        const AGE = 30 * 60 * 1000;
 
         let data;
         if (cached && Date.now() - cachedTime < AGE) {
@@ -344,7 +336,7 @@ class App {
         } else {
             try {
                 const res = await fetch(WEATHER_URL);
-                if (!res.ok) throw new Error('weather fetch failed');
+                if (!res.ok) throw new Error();
                 data = await res.json();
                 sessionStorage.setItem('orbit_weather', JSON.stringify(data));
                 sessionStorage.setItem('orbit_weather_ts', Date.now().toString());
@@ -357,11 +349,9 @@ class App {
 
         const cur = data?.current;
         if (!cur) return;
-
         const code = cur.weathercode ?? 0;
         const [icon, desc] = WMO_ICONS[code] || ['🌡️', 'Teresina'];
         const temp = Math.round(cur.temperature_2m ?? 0);
-
         document.getElementById('weather-icon').textContent = icon;
         document.getElementById('weather-temp').textContent = `${temp}°`;
         document.getElementById('weather-desc').textContent = desc;
@@ -370,7 +360,6 @@ class App {
     renderSportsCard() {
         const el = document.getElementById('dash-sports-content');
         if (!el) return;
-        // Static placeholder — TheSportsDB integration in Sessão 8
         el.innerHTML = `
             <div class="dash-list-item" style="gap:8px">
                 <span>🏎️</span>
@@ -383,7 +372,7 @@ class App {
         `;
     }
 
-    /* ── CHAT ─────────────────────────────────────── */
+    /* ── CHAT ── */
     loadChat() {
         const cfg = Store.getCfg();
         const hdrName = document.getElementById('hdr-name');
@@ -395,7 +384,7 @@ class App {
             if (empty) empty.style.display = 'none';
             history.slice(-20).forEach(m => {
                 if (m.role === 'user' || m.role === 'assistant') {
-                    UI.addMsg(m.role === 'user' ? 'user' : 'sophy', m.content || '', false, null, false);
+                    UI.addMsg(m.role === 'user' ? 'user' : 'sophy', m.content || '', false, null);
                 }
             });
             const msgs = document.getElementById('msgs');
@@ -410,18 +399,18 @@ class App {
         const text = inp.value.trim();
         if (!text && !this.pendingImage) return;
 
-        // Quick commands
-        if (text.startsWith('!ideia ')) {
-            IdeaVault.add(text.slice(7));
-            UI.toast('Ideia salva! 💡', 'ok');
-            inp.value = '';
-            return;
-        }
+        // Commands via /
         if (text === '/esquece') {
             Store.set('orbit_msgs', []);
             document.getElementById('msgs').innerHTML = '';
             document.getElementById('empty').style.display = 'flex';
             UI.toast('Sessão limpa.', 'ok');
+            inp.value = '';
+            return;
+        }
+        if (text.startsWith('!ideia ')) {
+            IdeaVault.add(text.slice(7));
+            UI.toast('Ideia salva! 💡', 'ok');
             inp.value = '';
             return;
         }
@@ -433,8 +422,14 @@ class App {
         }
 
         this.busy = true;
-        this.setUI(false);
+        this.hideCmdPalette();
         this.fullResponse = '';
+
+        // Show cancel button
+        const cancelBtn = document.getElementById('cancel-btn');
+        const sendBtn = document.getElementById('sendbtn');
+        if (cancelBtn) cancelBtn.style.display = '';
+        if (sendBtn) sendBtn.style.display = 'none';
 
         UI.addMsg('user', text, false, this.pendingImage);
         inp.value = '';
@@ -447,29 +442,45 @@ class App {
         this.pendingImage = null;
         this.removeAttach();
 
-        const sophyRow = UI.addMsg('sophy', '...', true);
-        const bubble = sophyRow ? sophyRow.querySelector('.mbubble') : null;
-        if (bubble) {
-            bubble.innerHTML = '<div class="typing"><div class="tdot"></div><div class="tdot"></div><div class="tdot"></div></div>';
-            bubble.id = 'sb';
-        }
+        // Sophy typing placeholder — addMsg sets id="sb" on .m-content
+        const sophyRow = UI.addMsg('sophy', '', true);
+        const sb = document.getElementById('sb');
+        if (sb) sb.innerHTML = '<div class="typing"><div class="tdot"></div><div class="tdot"></div><div class="tdot"></div></div>';
+
+        // AbortController for cancel
+        this.abortCtrl = new AbortController();
+
+        UI.setStatus('respondendo...');
 
         try {
-            await AI.streamRequest(
-                { messages: AI.getWindowedMsgs(history) },
+            // Optionally add URL hint
+            let aiMessages = AI.getWindowedMsgs(history);
+            if (URL_RE.test(text)) {
+                aiMessages = [...aiMessages];
+                const last = aiMessages[aiMessages.length - 1];
+                if (last && last.role === 'user') {
+                    aiMessages[aiMessages.length - 1] = {
+                        ...last,
+                        content: last.content + '\n\n[URL detectada — comente com base no seu conhecimento de treinamento se souber algo sobre ela]'
+                    };
+                }
+            }
+
+            const result = await AI.streamRequest(
+                { messages: aiMessages, signal: this.abortCtrl.signal },
                 (delta) => {
                     this.fullResponse += delta;
-                    const sb = document.getElementById('sb');
-                    if (sb) sb.innerHTML = this.fullResponse;
+                    const el = document.getElementById('sb');
+                    if (el) el.innerHTML = this.fullResponse;
                     const msgs = document.getElementById('msgs');
                     if (msgs) msgs.scrollTop = msgs.scrollHeight;
                 }
             );
 
-            const sb = document.getElementById('sb');
-            if (sb) {
-                sb.removeAttribute('id');
-                sb.innerHTML = UI.renderMd(this.fullResponse);
+            const finalEl = document.getElementById('sb');
+            if (finalEl) {
+                finalEl.removeAttribute('id');
+                finalEl.innerHTML = UI.renderMd(this.fullResponse);
             }
 
             history.push({ role: 'assistant', content: this.fullResponse });
@@ -477,25 +488,321 @@ class App {
 
             if (history.length % 12 === 0) AI.summarizeSession(history);
 
+            // Quota tracking
+            if (result?.provider) this.updateQuota(result.provider);
+
+            // Hands-free auto-speak
+            if (this._hf && this.fullResponse) {
+                setTimeout(() => this.speak(this.fullResponse), 400);
+            }
+
         } catch (err) {
-            const sb = document.getElementById('sb');
-            if (sb) sb.innerHTML = `<span class="merr">Erro: ${err.message}</span>`;
-            UI.toast('Falha na requisição', 'err');
+            const finalEl = document.getElementById('sb');
+            if (err.name === 'AbortError') {
+                // User cancelled — finalize partial response
+                if (finalEl) {
+                    finalEl.removeAttribute('id');
+                    if (this.fullResponse) {
+                        finalEl.innerHTML = UI.renderMd(this.fullResponse);
+                    } else {
+                        finalEl.innerHTML = '<em style="color:var(--fg-4)">Cancelado.</em>';
+                    }
+                }
+            } else {
+                if (finalEl) {
+                    finalEl.removeAttribute('id');
+                    finalEl.innerHTML = `<span class="merr">Erro: ${err.message}</span>`;
+                }
+                UI.toast('Falha na requisição', 'err');
+            }
         } finally {
+            this.abortCtrl = null;
+            if (cancelBtn) cancelBtn.style.display = 'none';
+            if (sendBtn) sendBtn.style.display = '';
             this.busy = false;
-            this.setUI(true);
+            UI.setStatus('online');
         }
     }
 
-    setUI(on) {
-        const btn = document.getElementById('sendbtn');
-        const inp = document.getElementById('msginput');
-        if (btn) btn.disabled = !on;
-        if (inp) inp.disabled = !on;
-        UI.setStatus(on ? 'online' : 'respondendo...');
+    /* ── CANCEL STREAM ── */
+    cancelStream() {
+        if (this.abortCtrl) {
+            this.abortCtrl.abort();
+            this.abortCtrl = null;
+        }
     }
 
-    /* ── PANEL ────────────────────────────────────── */
+    /* ── VOICE ── */
+    setupVoice() {
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SR) return;
+        this._sr = new SR();
+        this._sr.lang = 'pt-BR';
+        this._sr.continuous = false;
+        this._sr.interimResults = true;
+
+        this._sr.onresult = (e) => {
+            const transcript = Array.from(e.results).map(r => r[0].transcript).join('');
+            const inp = document.getElementById('msginput');
+            if (inp) inp.value = transcript;
+            const vtxt = document.getElementById('voice-text');
+            if (vtxt) vtxt.textContent = transcript || 'Ouvindo...';
+            if (e.results[e.results.length - 1].isFinal) {
+                this.stopVoice();
+                if (this._hf) setTimeout(() => this.handleSend(), 300);
+            }
+        };
+
+        this._sr.onend = () => this.stopVoice();
+        this._sr.onerror = () => this.stopVoice();
+    }
+
+    toggleVoice() {
+        if (this.voiceActive) this.stopVoice();
+        else this.startVoice();
+    }
+
+    startVoice() {
+        if (!this._sr) {
+            UI.toast('Reconhecimento de voz não disponível neste navegador.', 'err');
+            return;
+        }
+        const vb = document.getElementById('voice-bar');
+        const vbtn = document.getElementById('voice-btn');
+        if (vb) vb.style.display = 'flex';
+        if (vbtn) vbtn.classList.add('recording');
+        this.voiceActive = true;
+        try { this._sr.start(); } catch (_) {}
+    }
+
+    stopVoice() {
+        const vb = document.getElementById('voice-bar');
+        const vbtn = document.getElementById('voice-btn');
+        if (vb) vb.style.display = 'none';
+        if (vbtn) vbtn.classList.remove('recording');
+        this.voiceActive = false;
+        try { if (this._sr) this._sr.stop(); } catch (_) {}
+    }
+
+    speak(text) {
+        if (!window.speechSynthesis) return;
+        speechSynthesis.cancel();
+        const clean = text.replace(/<[^>]+>/g, '').replace(/[#*`_]/g, '').slice(0, 1200);
+        const utt = new SpeechSynthesisUtterance(clean);
+        utt.lang = 'pt-BR';
+        utt.rate = 1.05;
+        utt.pitch = 1;
+        // Pick a pt-BR voice if available
+        const voices = speechSynthesis.getVoices();
+        const ptVoice = voices.find(v => v.lang.startsWith('pt'));
+        if (ptVoice) utt.voice = ptVoice;
+        speechSynthesis.speak(utt);
+    }
+
+    toggleHF() {
+        this._hf = !this._hf;
+        const btn = document.getElementById('btn-hf');
+        if (btn) btn.classList.toggle('hf-active', this._hf);
+        UI.toast(this._hf ? 'Mãos livres ativado 🎧' : 'Mãos livres desativado', 'ok');
+    }
+
+    /* ── COMMANDS PALETTE ── */
+    handleInput() {
+        const inp = document.getElementById('msginput');
+        if (!inp) return;
+        const val = inp.value;
+        if (val === '/') this.showCmdPalette();
+        else this.hideCmdPalette();
+        inp.style.height = 'auto';
+        inp.style.height = Math.min(inp.scrollHeight, 120) + 'px';
+    }
+
+    showCmdPalette() {
+        const pal = document.getElementById('cmd-palette');
+        if (pal) pal.style.display = 'flex';
+    }
+
+    hideCmdPalette() {
+        const pal = document.getElementById('cmd-palette');
+        if (pal) pal.style.display = 'none';
+    }
+
+    runCmd(cmd) {
+        this.hideCmdPalette();
+        const inp = document.getElementById('msginput');
+        if (inp) { inp.value = ''; inp.style.height = 'auto'; }
+
+        if (cmd === 'esquece') {
+            Store.set('orbit_msgs', []);
+            document.getElementById('msgs').innerHTML = '';
+            document.getElementById('empty').style.display = 'flex';
+            UI.toast('Sessão limpa.', 'ok');
+        } else if (cmd === 'pinned') {
+            this.showPinned();
+        } else if (cmd === 'exportar') {
+            this.exportChat();
+        }
+    }
+
+    /* ── SEARCH ── */
+    openSearch() {
+        const bar = document.getElementById('hdr-search');
+        if (bar) {
+            bar.style.display = 'flex';
+            setTimeout(() => document.getElementById('search-inp')?.focus(), 100);
+        }
+    }
+
+    closeSearch() {
+        const bar = document.getElementById('hdr-search');
+        if (bar) bar.style.display = 'none';
+        const sinp = document.getElementById('search-inp');
+        if (sinp) sinp.value = '';
+        document.querySelectorAll('.msg-row').forEach(r => {
+            r.classList.remove('search-match', 'search-hidden');
+        });
+    }
+
+    runSearch(query) {
+        const q = (query || '').trim().toLowerCase();
+        document.querySelectorAll('.msg-row').forEach(row => {
+            if (!q) {
+                row.classList.remove('search-match', 'search-hidden');
+                return;
+            }
+            const txt = (row.querySelector('.m-content')?.innerText || '').toLowerCase();
+            if (txt.includes(q)) {
+                row.classList.add('search-match');
+                row.classList.remove('search-hidden');
+            } else {
+                row.classList.add('search-hidden');
+                row.classList.remove('search-match');
+            }
+        });
+        const first = document.querySelector('.msg-row.search-match');
+        if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    /* ── SCROLL TO BOTTOM ── */
+    scrollBottom() {
+        const msgs = document.getElementById('msgs');
+        if (msgs) msgs.scrollTop = msgs.scrollHeight;
+    }
+
+    /* ── EXPORT ── */
+    exportChat() {
+        const rows = document.querySelectorAll('.msg-row');
+        let out = `ORBIT SOPHY — Conversa exportada em ${new Date().toLocaleString('pt-BR')}\n${'='.repeat(50)}\n\n`;
+        rows.forEach(row => {
+            const isUser = row.classList.contains('user');
+            const txt = row.querySelector('.m-content')?.innerText || '';
+            out += `${isUser ? 'VOCÊ' : 'ORBIT'}: ${txt}\n\n`;
+        });
+        const blob = new Blob([out], { type: 'text/plain;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `orbit-chat-${new Date().toISOString().slice(0,10)}.txt`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+        UI.toast('Conversa exportada!', 'ok');
+    }
+
+    /* ── QUOTA BAR ── */
+    updateQuota(provider) {
+        const key = `orbit_quota_${provider}_${new Date().toISOString().slice(0,10)}`;
+        const count = parseInt(localStorage.getItem(key) || '0') + 1;
+        localStorage.setItem(key, count.toString());
+
+        const limits = { groq: 14400, gemini: 1500 };
+        const limit = limits[provider] || 1000;
+        const pct = Math.min(100, (count / limit) * 100);
+
+        const bar = document.getElementById('quota-bar');
+        if (!bar) return;
+        if (pct < 50) { bar.style.display = 'none'; return; }
+
+        const label = provider === 'groq' ? 'Groq' : 'Gemini';
+        const cls = pct >= 85 ? 'quota-warn' : 'quota-ok';
+        bar.style.display = 'flex';
+        bar.className = `quota-bar ${cls}`;
+        bar.innerHTML = `<span>${label}: ${count}/${limit} req hoje</span><div class="quota-track"><div class="quota-fill" style="width:${pct}%"></div></div>`;
+    }
+
+    /* ── MESSAGE CONTEXT MENU ── */
+    showMsgCtx(msgId, x, y) {
+        this._ctxMsgId = msgId;
+        const ctx = document.getElementById('msg-ctx');
+        if (!ctx) return;
+
+        ctx.style.display = 'block';
+        const cw = window.innerWidth, ch = window.innerHeight;
+        let left = x, top = y;
+        if (left + 180 > cw) left = cw - 185;
+        if (top + 200 > ch) top = ch - 205;
+        if (left < 8) left = 8;
+        if (top < 8) top = 8;
+        ctx.style.left = left + 'px';
+        ctx.style.top = top + 'px';
+
+        if (navigator.vibrate) navigator.vibrate(30);
+    }
+
+    hideMsgCtx() {
+        const ctx = document.getElementById('msg-ctx');
+        if (ctx) ctx.style.display = 'none';
+        this._ctxMsgId = null;
+    }
+
+    copyMsg() {
+        const row = document.querySelector(`[data-msgid="${this._ctxMsgId}"]`);
+        if (!row) return this.hideMsgCtx();
+        const txt = row.querySelector('.m-content')?.innerText || '';
+        navigator.clipboard.writeText(txt).then(() => UI.toast('Copiado!', 'ok')).catch(() => UI.toast('Erro ao copiar', 'err'));
+        this.hideMsgCtx();
+    }
+
+    deleteMsg() {
+        const row = document.querySelector(`[data-msgid="${this._ctxMsgId}"]`);
+        if (row) {
+            row.style.opacity = '0';
+            row.style.transition = 'opacity 0.2s';
+            setTimeout(() => row.remove(), 200);
+        }
+        this.hideMsgCtx();
+    }
+
+    pinMsg() {
+        const row = document.querySelector(`[data-msgid="${this._ctxMsgId}"]`);
+        if (!row) return this.hideMsgCtx();
+        const txt = row.querySelector('.m-content')?.innerText || '';
+        const pins = JSON.parse(localStorage.getItem('orbit_pins') || '[]');
+        pins.push({ id: this._ctxMsgId, text: txt.slice(0, 300), ts: Date.now() });
+        localStorage.setItem('orbit_pins', JSON.stringify(pins.slice(-20)));
+        const bubble = row.querySelector('.mbubble');
+        if (bubble) bubble.classList.add('pinned');
+        UI.toast('Mensagem fixada 📌', 'ok');
+        this.hideMsgCtx();
+    }
+
+    speakMsg() {
+        const row = document.querySelector(`[data-msgid="${this._ctxMsgId}"]`);
+        if (!row) return this.hideMsgCtx();
+        const txt = row.querySelector('.m-content')?.innerText || '';
+        this.speak(txt);
+        this.hideMsgCtx();
+    }
+
+    showPinned() {
+        const pins = JSON.parse(localStorage.getItem('orbit_pins') || '[]');
+        if (!pins.length) { UI.toast('Nenhuma mensagem fixada.', 'ok'); return; }
+        const content = pins.map((p, i) => `${i + 1}. ${p.text}`).join('\n\n');
+        const msgs = document.getElementById('msgs');
+        const empty = document.getElementById('empty');
+        if (empty) empty.style.display = 'none';
+        UI.addMsg('sophy', `**📌 Mensagens Fixadas (${pins.length}):**\n\n${content}`, false);
+    }
+
+    /* ── PANEL ── */
     openPanel() {
         this.renderPanelTab(this.activeTab);
         document.getElementById('panel').classList.add('open');
@@ -556,10 +863,9 @@ class App {
                 <button class="btn btn-primary" onclick="orbit.saveSettings()">SALVAR</button>
                 <div class="psec" style="margin-top:16px">
                   <label class="plabel">STATUS</label>
-                  <div id="ai-status" style="font-family:var(--fm);font-size:12px;color:var(--text-sec)">
+                  <div style="font-family:var(--fm);font-size:12px;color:var(--text-sec)">
                     ${cfg.groqKey ? '● Groq configurado (primário)' : '○ Groq não configurado'}
-                    <br>
-                    ${cfg.apiKey ? '● Gemini configurado (fallback)' : '○ Gemini não configurado'}
+                    <br>${cfg.apiKey ? '● Gemini configurado (fallback)' : '○ Gemini não configurado'}
                   </div>
                 </div>
             `;
@@ -663,14 +969,14 @@ class App {
             ${cols.map(c => `
                 <div>
                   <div style="font-family:var(--fm);font-size:9px;letter-spacing:1px;color:var(--text-muted);margin-bottom:6px">${labels[c]} (${(kb[c]||[]).length})</div>
-                  ${(kb[c]||[]).map(item => `<div onclick="orbit.moveTask('${item.id}','${c}')" style="background:var(--overlay);border:1px solid var(--border);border-radius:8px;padding:7px 9px;font-size:12px;margin-bottom:5px;cursor:pointer;-webkit-tap-highlight-color:transparent">${item.text}</div>`).join('')}
+                  ${(kb[c]||[]).map(item => `<div onclick="orbit.moveTask('${item.id}','${c}')" style="background:var(--overlay);border:1px solid var(--border);border-radius:8px;padding:7px 9px;font-size:12px;margin-bottom:5px;cursor:pointer">${item.text}</div>`).join('')}
                   <input type="text" id="ki-${c}" placeholder="+" style="font-size:12px;padding:6px 9px" onkeydown="if(event.key==='Enter')orbit.addTask('${c}')">
                 </div>
             `).join('')}
         </div>`;
     }
 
-    /* ── ACTIONS ──────────────────────────────────── */
+    /* ── ACTIONS ── */
     saveSettings() {
         const cfg = Store.getCfg();
         const fields = { 's-name': 'name', 's-key': 'apiKey', 's-groq': 'groqKey', 's-model': 'model', 's-groq-model': 'groqModel', 's-prompt': 'prompt' };
@@ -804,7 +1110,7 @@ class App {
         location.reload();
     }
 
-    /* ── FILE ATTACH ──────────────────────────────── */
+    /* ── FILE ATTACH ── */
     onFileSelect(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -830,28 +1136,25 @@ class App {
         if (inp) inp.value = '';
     }
 
-    /* ── SETUP LISTENERS ──────────────────────────── */
+    /* ── SETUP LISTENERS ── */
     setupListeners() {
         // Send button
         document.getElementById('sendbtn')?.addEventListener('click', () => this.handleSend());
 
-        // Textarea
+        // Textarea — input auto-resize + palette trigger
         const inp = document.getElementById('msginput');
         if (inp) {
             inp.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.handleSend(); }
+                if (e.key === 'Escape') this.hideCmdPalette();
             });
-            inp.addEventListener('input', () => {
-                inp.style.height = 'auto';
-                inp.style.height = Math.min(inp.scrollHeight, 120) + 'px';
-            });
+            inp.addEventListener('input', () => this.handleInput());
         }
 
         // Panel tabs
         document.querySelectorAll('.tab').forEach(t => {
             t.addEventListener('click', (e) => {
-                const tab = e.currentTarget.dataset.tab;
-                this.switchPanelTab(tab, e.currentTarget);
+                this.switchPanelTab(e.currentTarget.dataset.tab, e.currentTarget);
             });
         });
 
@@ -867,14 +1170,36 @@ class App {
         document.getElementById('file-inp')?.addEventListener('change', (e) => this.onFileSelect(e));
 
         // Android back button
-        window.addEventListener('popstate', (e) => {
-            if (this.chatOpen) {
-                this.closeChat(false);
+        window.addEventListener('popstate', () => {
+            if (this.chatOpen) this.closeChat(false);
+        });
+
+        // Scroll-to-bottom button visibility
+        const msgs = document.getElementById('msgs');
+        if (msgs) {
+            msgs.addEventListener('scroll', () => {
+                const btn = document.getElementById('scroll-btn');
+                if (!btn) return;
+                const atBottom = msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 80;
+                btn.style.display = atBottom ? 'none' : 'flex';
+            });
+        }
+
+        // Click-outside: close ctx menu and palette
+        document.addEventListener('pointerdown', (e) => {
+            const ctx = document.getElementById('msg-ctx');
+            if (ctx && ctx.style.display !== 'none' && !ctx.contains(e.target)) {
+                this.hideMsgCtx();
+            }
+            const pal = document.getElementById('cmd-palette');
+            const textarea = document.getElementById('msginput');
+            if (pal && pal.style.display !== 'none' && !pal.contains(e.target) && e.target !== textarea) {
+                this.hideCmdPalette();
             }
         });
     }
 
-    /* ── UTILS ────────────────────────────────────── */
+    /* ── UTILS ── */
     fixViewport() {
         if (!window.visualViewport) return;
         window.visualViewport.addEventListener('resize', () => {
