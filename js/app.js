@@ -445,9 +445,12 @@ class App {
         if (!el) return;
         el.innerHTML = '<div class="dash-empty">Carregando...</div>';
 
-        const [f1, fla] = await Promise.all([
+        const teams = Entertainment.getTeams();
+        const firstTeam = teams[0] || null;
+
+        const [f1, teamGame] = await Promise.all([
             Entertainment.getF1NextRace(),
-            Entertainment.getFlamengoNext()
+            firstTeam ? Entertainment.getTeamNext(firstTeam.espnId, firstTeam.espnLeague) : Promise.resolve(null)
         ]);
 
         let html = '';
@@ -461,13 +464,20 @@ class App {
         } else {
             html += `<div class="dash-list-item" style="gap:8px"><span>🏎️</span><span style="font-size:13px;color:var(--fg-4)">F1 — sem dados</span></div>`;
         }
-        if (fla) {
-            html += `<div class="dash-list-item" style="gap:8px">
-                <span>⚽</span>
-                <span style="font-size:13px">${fla.strHomeTeam} × ${fla.strAwayTeam}</span>
-            </div>`;
+        if (firstTeam) {
+            if (teamGame) {
+                const score = (teamGame.homeScore !== null && teamGame.awayScore !== null)
+                    ? ` ${teamGame.homeScore}–${teamGame.awayScore}` : '';
+                html += `<div class="dash-list-item" style="gap:8px">
+                    <span>${firstTeam.flag || '⚽'}</span>
+                    <span style="font-size:13px;flex:1">${teamGame.home} ×${score} ${teamGame.away}</span>
+                    ${teamGame.live ? '<span style="font-size:10px;color:var(--err)">AO VIVO</span>' : ''}
+                </div>`;
+            } else {
+                html += `<div class="dash-list-item" style="gap:8px"><span>${firstTeam.flag || '⚽'}</span><span style="font-size:13px;color:var(--fg-4)">${firstTeam.name} — sem jogo</span></div>`;
+            }
         } else {
-            html += `<div class="dash-list-item" style="gap:8px"><span>⚽</span><span style="font-size:13px;color:var(--fg-4)">Flamengo — verificar</span></div>`;
+            html += `<div class="dash-list-item" style="gap:8px"><span>⚽</span><span style="font-size:13px;color:var(--fg-4)">Adicione um time no Hub</span></div>`;
         }
         el.innerHTML = html;
     }
@@ -1686,18 +1696,23 @@ class App {
     }
 
     async renderHubEsportes() {
+        // Times
+        this._renderTeamsList();
+        Entertainment.getTeams().forEach(t => this._loadTeamGame(t));
+
+        // Notícias
+        this._renderNewsSkeleton();
+        Entertainment.getTechNews().then(news => this._renderNewsList(news));
+
+        // F1
         const f1Next = document.getElementById('f1-next-card');
         const f1Stand = document.getElementById('f1-standings');
-        const flaCard = document.getElementById('fla-card');
-        const ps5List = document.getElementById('ps5-list');
-
         if (f1Next) f1Next.innerHTML = '<div style="color:var(--fg-4);font-size:13px">Carregando F1...</div>';
         if (f1Stand) f1Stand.innerHTML = '';
 
-        const [race, standings, fla] = await Promise.all([
+        const [race, standings] = await Promise.all([
             Entertainment.getF1NextRace(),
-            Entertainment.getF1Standings(),
-            Entertainment.getFlamengoNext()
+            Entertainment.getF1Standings()
         ]);
 
         if (f1Next) {
@@ -1709,7 +1724,7 @@ class App {
                     <div class="f1-countdown">${diff > 0 ? `em ${diff} dias` : diff === 0 ? 'HOJE!' : 'Em andamento'}</div>
                     <div class="f1-countdown-label">${fmtDate} · ${fmtTime} (Fortaleza)</div>`;
             } else {
-                f1Next.innerHTML = '<div style="color:var(--fg-4);font-size:13px">Sem dados de corrida. Sem conexão?</div>';
+                f1Next.innerHTML = '<div style="color:var(--fg-4);font-size:13px">Sem dados de corrida.</div>';
             }
         }
 
@@ -1727,20 +1742,191 @@ class App {
             }
         }
 
-        if (flaCard) {
-            if (fla) {
-                const gameDate = fla.dateEvent ? new Date(fla.dateEvent).toLocaleDateString('pt-BR', { day:'2-digit', month:'short' }) : '';
-                flaCard.innerHTML = `
-                    <div class="fla-match">
-                        <div class="fla-teams">${fla.strHomeTeam} × ${fla.strAwayTeam}</div>
-                        <div class="fla-info">${fla.strLeague || ''} · ${gameDate}</div>
-                    </div>`;
-            } else {
-                flaCard.innerHTML = '<div style="color:var(--fg-4);font-size:13px">Próximo jogo não disponível.</div>';
-            }
+        this._renderPS5();
+    }
+
+    /* ── TIMES ──────────────────────────────────────── */
+    _renderTeamsList() {
+        const el = document.getElementById('sport-teams-list');
+        if (!el) return;
+        const teams = Entertainment.getTeams();
+        if (!teams.length) {
+            el.innerHTML = `<div class="fin-empty" style="padding:14px 0;text-align:center;line-height:1.8">
+                Nenhum time ainda.<br><span style="font-size:12px;color:var(--fg-4)">Toque em + para buscar</span>
+            </div>`;
+            return;
+        }
+        el.innerHTML = teams.map(t => `
+            <div class="sport-team-card">
+                <div class="stc-hdr">
+                    <span class="stc-flag">${t.flag || '⚽'}</span>
+                    <span class="stc-name">${t.name}</span>
+                    <div class="stc-actions">
+                        ${t.tmId ? `<button class="stc-btn-sm" onclick="orbit.sportViewTransfers('${t.tmId}','${t.name}')">Transf.</button>` : ''}
+                        <button class="stc-del" onclick="orbit.sportRemoveTeam('${t.id}')">×</button>
+                    </div>
+                </div>
+                <div class="stcg" id="stcg-${t.id}"><span style="color:var(--fg-4);font-size:12px">Buscando...</span></div>
+            </div>
+        `).join('');
+    }
+
+    async _loadTeamGame(team) {
+        const el = document.getElementById(`stcg-${team.id}`);
+        if (!el) return;
+        const game = await Entertainment.getTeamNext(team.espnId, team.espnLeague);
+        if (!game) {
+            el.innerHTML = '<span style="color:var(--fg-4);font-size:12px">Próximo jogo não encontrado</span>';
+            return;
+        }
+        const { fmtDate, fmtTime } = Entertainment.formatGameDate(game.date);
+        const score = (game.homeScore !== null && game.awayScore !== null) ? `${game.homeScore}–${game.awayScore}` : '×';
+        el.innerHTML = `
+            <div class="stcg-teams">${game.home} <span class="stcg-score">${score}</span> ${game.away}</div>
+            <div class="stcg-info">${game.live ? '🔴 AO VIVO' : `${fmtDate} · ${fmtTime}`}</div>
+        `;
+    }
+
+    sportShowAddModal() {
+        const m = document.getElementById('sport-add-modal');
+        if (m) { m.style.display = 'flex'; }
+    }
+
+    sportHideAddModal() {
+        const m = document.getElementById('sport-add-modal');
+        if (m) m.style.display = 'none';
+        const r = document.getElementById('sport-search-results');
+        if (r) r.innerHTML = '';
+        const i = document.getElementById('sport-search-inp');
+        if (i) i.value = '';
+        this._sportSearchResults = null;
+    }
+
+    async sportSearchTeam() {
+        const query = document.getElementById('sport-search-inp')?.value?.trim();
+        const league = document.getElementById('sport-search-league')?.value;
+        if (!query) return UI.toast('Digite o nome do time!', 'err');
+        if (!league) return UI.toast('Selecione a liga!', 'err');
+
+        const el = document.getElementById('sport-search-results');
+        if (el) el.innerHTML = '<div style="color:var(--fg-4);font-size:13px;padding:10px 0">Buscando...</div>';
+
+        const [espnResults, tmResults] = await Promise.all([
+            Entertainment.searchESPNTeam(query, league),
+            Entertainment.searchTMTeam(query)
+        ]);
+
+        if (!el) return;
+        if (!espnResults.length) {
+            el.innerHTML = '<div style="color:var(--fg-4);font-size:13px;padding:10px 0">Nenhum time encontrado. Tente outra liga.</div>';
+            return;
         }
 
-        if (ps5List) this._renderPS5();
+        this._sportSearchResults = espnResults.map(t => {
+            const tmMatch = tmResults.find(tm =>
+                tm.name.toLowerCase().includes(t.name.split(' ')[0].toLowerCase()) ||
+                t.name.toLowerCase().includes(tm.name.split(' ')[0].toLowerCase())
+            );
+            return { ...t, tmId: tmMatch?.tmId || '', tmName: tmMatch?.name || '', league };
+        });
+
+        el.innerHTML = this._sportSearchResults.map((t, i) => `
+            <div class="sport-result-item" onclick="orbit._sportSelectResult(${i})">
+                <div class="sri-name">${t.name}</div>
+                <div class="sri-sub" style="color:${t.tmId ? 'var(--ok)' : 'var(--fg-4)'}">
+                    ${t.tmId ? `✓ Transferências: ${t.tmName}` : 'Sem dados de transferência'}
+                </div>
+            </div>
+        `).join('');
+    }
+
+    _sportSelectResult(idx) {
+        const t = this._sportSearchResults?.[idx];
+        if (!t) return;
+        const flagMap = {
+            'bra': '🇧🇷', 'arg': '🇦🇷', 'esp': '🇪🇸', 'eng': '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
+            'ita': '🇮🇹', 'ger': '🇩🇪', 'fra': '🇫🇷', 'por': '🇵🇹',
+            'conmebol': '🌎', 'uefa': '🌍', 'fifa': '🌍'
+        };
+        const flag = Object.entries(flagMap).find(([k]) => t.league.startsWith(k))?.[1] || '⚽';
+        const team = { id: t.espnId, name: t.name, flag, espnId: t.espnId, espnLeague: t.league, tmId: t.tmId };
+        const teams = Entertainment.getTeams().filter(x => x.id !== team.id);
+        teams.push(team);
+        Entertainment.saveTeams(teams);
+        this.sportHideAddModal();
+        this._renderTeamsList();
+        this._loadTeamGame(team);
+        UI.toast(`${t.name} adicionado!`, 'ok');
+    }
+
+    sportRemoveTeam(id) {
+        Entertainment.removeTeam(id);
+        this._renderTeamsList();
+        if (navigator.vibrate) navigator.vibrate(30);
+    }
+
+    async sportViewTransfers(tmId, teamName) {
+        const ctx = document.getElementById('ctx');
+        const ctxBody = document.getElementById('ctx-body');
+        const dateEl = document.getElementById('ctx-date');
+        const titleEl = document.querySelector('.ctx-title');
+        if (!ctx || !ctxBody) return;
+
+        if (titleEl) titleEl.textContent = 'TRANSFERÊNCIAS';
+        if (dateEl) dateEl.textContent = teamName.toUpperCase();
+        ctxBody.innerHTML = '<div style="padding:20px 0;text-align:center;color:var(--fg-4);font-size:13px">Carregando Transfermarkt...</div>';
+        ctx.style.display = 'flex';
+
+        const data = await Entertainment.getTeamTransfers(tmId);
+        if (!data) {
+            ctxBody.innerHTML = '<div style="padding:20px;color:var(--fg-4);font-size:13px">Indisponível. Verifique a conexão.</div>';
+            return;
+        }
+
+        const renderTx = t => {
+            const name = t.name || t.player_name || '?';
+            const from = t.from_club_name || t.left_team?.name || '?';
+            const to = t.to_club_name || t.joined_team?.name || '?';
+            const fee = t.fee || t.transfer_fee || '—';
+            const mv = t.market_value || '';
+            const pos = t.position || '';
+            return `<div style="padding:10px 0;border-bottom:1px solid var(--line-1)">
+                <div style="font-size:13px;font-weight:600;color:var(--fg-1)">${name}</div>
+                ${pos ? `<div style="font-size:11px;color:var(--fg-4)">${pos}</div>` : ''}
+                <div style="font-size:12px;color:var(--fg-3);margin-top:2px">${from} → ${to}</div>
+                <div style="font-size:12px;color:var(--gold);font-weight:600">${fee}${mv ? ` · VM: ${mv}` : ''}</div>
+            </div>`;
+        };
+
+        const arrivals = data.arrivals || [];
+        const departures = data.departures || [];
+
+        ctxBody.innerHTML = `<div style="padding:0 16px 24px">
+            ${arrivals.length ? `<div style="padding:12px 0 8px;color:var(--ok);font-size:11px;font-weight:700;letter-spacing:1px">CHEGADAS</div>${arrivals.map(renderTx).join('')}` : ''}
+            ${departures.length ? `<div style="padding:12px 0 8px;color:var(--err);font-size:11px;font-weight:700;letter-spacing:1px">SAÍDAS</div>${departures.map(renderTx).join('')}` : ''}
+            ${!arrivals.length && !departures.length ? '<div style="color:var(--fg-4);font-size:13px;padding:16px 0">Sem transferências na temporada atual.</div>' : ''}
+        </div>`;
+    }
+
+    /* ── NOTÍCIAS TECH ──────────────────────────────── */
+    _renderNewsSkeleton() {
+        const el = document.getElementById('sport-news-list');
+        if (el) el.innerHTML = '<div style="color:var(--fg-4);font-size:13px;padding:8px 0">Carregando notícias...</div>';
+    }
+
+    _renderNewsList(news) {
+        const el = document.getElementById('sport-news-list');
+        if (!el) return;
+        if (!news.length) {
+            el.innerHTML = '<div style="color:var(--fg-4);font-size:13px">Sem conexão ou sem notícias.</div>';
+            return;
+        }
+        el.innerHTML = news.map(n => `
+            <a class="news-item" href="${n.url}" target="_blank" rel="noopener">
+                <div class="news-title">${n.title}</div>
+                <div class="news-meta">${n.score} pts · ${n.comments} comentários · ${n.time}</div>
+            </a>
+        `).join('');
     }
 
     _renderPS5() {

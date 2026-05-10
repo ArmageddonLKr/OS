@@ -225,6 +225,33 @@
 
 /* ── ESPORTES ── */
 .sport-sec-title { font-family: var(--fm); font-size: 9px; letter-spacing: .18em; color: var(--fg-4); text-transform: uppercase; padding: 14px 16px 6px; }
+.sport-sec-hdr { display: flex; align-items: center; justify-content: space-between; padding-right: 16px; }
+
+/* Times */
+.sport-team-card { margin: 0 14px 8px; background: var(--bg-2); border: 1px solid var(--line-1); border-radius: var(--r-md); padding: 12px 14px; }
+.stc-hdr { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.stc-flag { font-size: 16px; flex-shrink: 0; }
+.stc-name { font-size: 13px; font-weight: 600; color: var(--fg-1); flex: 1; }
+.stc-actions { display: flex; gap: 6px; align-items: center; }
+.stc-btn-sm { background: var(--bg-4); border: 1px solid var(--line-2); color: var(--fg-2); font-family: var(--fm); font-size: 10px; font-weight: 600; letter-spacing: .05em; padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+.stc-del { background: none; border: none; color: var(--fg-4); font-size: 20px; cursor: pointer; padding: 0 2px; line-height: 1; }
+.stc-add-btn { background: var(--bg-4); border: 1px solid var(--line-2); color: var(--fg-1); width: 28px; height: 28px; border-radius: 8px; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1; }
+.stcg { padding-left: 24px; }
+.stcg-teams { font-size: 13px; font-weight: 600; color: var(--fg-1); }
+.stcg-score { color: var(--gold); font-family: var(--fm); }
+.stcg-info { font-size: 11px; color: var(--fg-4); margin-top: 2px; font-family: var(--fm); }
+
+/* Busca de times */
+.sport-result-item { padding: 12px; border: 1px solid var(--line-1); border-radius: 10px; margin-bottom: 6px; cursor: pointer; background: var(--bg-3); -webkit-tap-highlight-color: transparent; }
+.sport-result-item:active { background: var(--bg-4); }
+.sri-name { font-size: 14px; font-weight: 600; color: var(--fg-1); }
+.sri-sub { font-size: 11px; margin-top: 3px; font-family: var(--fm); }
+
+/* Notícias */
+.news-item { display: block; padding: 10px 14px; border-bottom: 1px solid var(--line-1); text-decoration: none; -webkit-tap-highlight-color: transparent; }
+.news-item:active { background: var(--bg-3); }
+.news-title { font-size: 13px; color: var(--fg-1); line-height: 1.4; }
+.news-meta { font-family: var(--fm); font-size: 10px; color: var(--fg-4); margin-top: 4px; letter-spacing: .05em; }
 .sport-card { margin: 0 14px; background: var(--bg-2); border: 1px solid var(--line-1); border-radius: var(--r-md); padding: 14px; }
 .f1-next-name { font-size: 15px; font-weight: 600; color: var(--fg-1); margin-bottom: 4px; }
 .f1-next-circuit { font-family: var(--fm); font-size: 11px; color: var(--fg-4); margin-bottom: 10px; }
