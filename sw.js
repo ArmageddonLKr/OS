@@ -1,4 +1,4 @@
-const CACHE = 'orbit-v11';
+const CACHE = 'orbit-v12';
 const SHELL = [
   './',
   './index.html',
@@ -12,7 +12,12 @@ const SHELL = [
   './js/faith.js',
   './manifest.json',
   './icon-192.png',
-  './icon-512.png'
+  './icon-512.png',
+  './fonts/SpaceGrotesk-Variable.woff2',
+  './fonts/JetBrainsMono-Variable.woff2',
+  './fonts/Inter-Regular.woff2',
+  './fonts/Inter-Medium.woff2',
+  './fonts/Inter-Bold.woff2'
 ];
 
 self.addEventListener('install', e => {
@@ -36,22 +41,6 @@ self.addEventListener('fetch', e => {
 
   // API Gemini: nunca intercepta
   if (url.includes('googleapis.com') || url.includes('generativelanguage')) return;
-
-  // Fonts: network-first, cacheia pra offline
-  if (url.includes('fonts.googleapis.com') || url.includes('fonts.gstatic.com')) {
-    e.respondWith(
-      caches.match(e.request).then(cached => {
-        return fetch(e.request).then(res => {
-          if (res.ok) {
-            const clone = res.clone();
-            caches.open(CACHE).then(c => c.put(e.request, clone));
-          }
-          return res;
-        }).catch(() => cached || new Response('', {status: 408}));
-      })
-    );
-    return;
-  }
 
   // index.html: network-first — novos deploys chegam imediatamente
   if (url.endsWith('/') || url.includes('index.html')) {
