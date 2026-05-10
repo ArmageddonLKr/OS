@@ -511,17 +511,40 @@ class App {
         UI.setStatus('respondendo...');
 
         try {
-            // Optionally add URL hint
             let aiMessages = AI.getWindowedMsgs(history);
-            if (URL_RE.test(text)) {
-                aiMessages = [...aiMessages];
-                const last = aiMessages[aiMessages.length - 1];
-                if (last && last.role === 'user') {
-                    aiMessages[aiMessages.length - 1] = {
-                        ...last,
-                        content: last.content + '\n\n[URL detectada — comente com base no seu conhecimento de treinamento se souber algo sobre ela]'
-                    };
+            const urlMatch = text.match(URL_RE);
+            if (urlMatch) {
+                try {
+                    UI.setStatus('lendo URL...');
+                    const jinaRes = await fetch(`https://r.jina.ai/${urlMatch[0]}`, {
+                        signal: this.abortCtrl.signal,
+                        headers: { 'Accept': 'text/plain', 'X-No-Cache': 'true' }
+                    });
+                    if (jinaRes.ok) {
+                        const content = (await jinaRes.text()).slice(0, 3500).trim();
+                        if (content) {
+                            aiMessages = [...aiMessages];
+                            const last = aiMessages[aiMessages.length - 1];
+                            if (last?.role === 'user') {
+                                aiMessages[aiMessages.length - 1] = {
+                                    ...last,
+                                    content: last.content + `\n\n[CONTEÚDO DA URL PARA ANÁLISE/RESUMO:\n${content}\nFIM DO CONTEÚDO]`
+                                };
+                            }
+                            UI.toast('URL lida!', 'ok');
+                        }
+                    }
+                } catch (_) {
+                    aiMessages = [...aiMessages];
+                    const last = aiMessages[aiMessages.length - 1];
+                    if (last?.role === 'user') {
+                        aiMessages[aiMessages.length - 1] = {
+                            ...last,
+                            content: last.content + '\n\n[URL detectada — comente com base no seu conhecimento sobre ela]'
+                        };
+                    }
                 }
+                UI.setStatus('respondendo...');
             }
 
             const result = await AI.streamRequest(
@@ -546,6 +569,9 @@ class App {
 
             if (history.length % 12 === 0) AI.summarizeSession(history);
 
+            // Cache para fallback offline
+            this._cacheResponse(text, this.fullResponse);
+
             // Quota tracking
             if (result?.provider) this.updateQuota(result.provider);
 
@@ -566,6 +592,17 @@ class App {
                         finalEl.innerHTML = '<em style="color:var(--fg-4)">Cancelado.</em>';
                     }
                 }
+            } else if (!navigator.onLine || err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError')) {
+                const cached = this._findCachedResponse(text);
+                if (finalEl) finalEl.removeAttribute('id');
+                if (cached) {
+                    if (finalEl) finalEl.innerHTML = UI.renderMd(cached.a) + '<div class="cache-badge">📦 resposta em cache (offline)</div>';
+                    history.push({ role: 'assistant', content: cached.a });
+                    Store.set('orbit_msgs', history.slice(-100));
+                } else {
+                    if (finalEl) finalEl.innerHTML = '<span class="merr">Sem conexão. Sem cache para esta pergunta.</span>';
+                }
+                UI.toast('Offline — usando cache', 'err');
             } else {
                 if (finalEl) {
                     finalEl.removeAttribute('id');
@@ -862,6 +899,42 @@ class App {
         const txt = row.querySelector('.m-content')?.innerText || '';
         this.speak(txt);
         this.hideMsgCtx();
+    }
+
+    shareMsg() {
+        const row = document.querySelector(`[data-msgid="${this._ctxMsgId}"]`);
+        if (!row) return this.hideMsgCtx();
+        const txt = row.querySelector('.m-content')?.innerText || '';
+        this.hideMsgCtx();
+        if (navigator.share) {
+            navigator.share({ title: 'Orbit Sophy', text: txt }).catch(() => {});
+        } else {
+            navigator.clipboard.writeText(txt)
+                .then(() => UI.toast('Copiado!', 'ok'))
+                .catch(() => UI.toast('Compartilhamento não disponível.', 'err'));
+        }
+    }
+
+    _cacheResponse(question, answer) {
+        try {
+            const cache = JSON.parse(localStorage.getItem('orbit_resp_cache') || '[]');
+            cache.push({ q: question.slice(0, 120), a: answer.slice(0, 600), ts: Date.now() });
+            localStorage.setItem('orbit_resp_cache', JSON.stringify(cache.slice(-15)));
+        } catch (_) {}
+    }
+
+    _findCachedResponse(question) {
+        try {
+            const cache = JSON.parse(localStorage.getItem('orbit_resp_cache') || '[]');
+            if (!cache.length) return null;
+            const qWords = question.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+            let best = null, bestScore = 0;
+            for (const entry of cache) {
+                const score = qWords.filter(w => entry.q.toLowerCase().includes(w)).length;
+                if (score > bestScore && score >= 2) { bestScore = score; best = entry; }
+            }
+            return best;
+        } catch (_) { return null; }
     }
 
     showPinned() {
@@ -1244,6 +1317,7 @@ class App {
 
         // File input
         document.getElementById('file-inp')?.addEventListener('change', (e) => this.onFileSelect(e));
+        document.getElementById('cam-inp')?.addEventListener('change', (e) => this.onFileSelect(e));
 
         // Android back button
         window.addEventListener('popstate', () => {

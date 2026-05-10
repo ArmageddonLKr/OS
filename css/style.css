@@ -1535,6 +1535,16 @@ select option { background: var(--raised); }
 .voice-waves span:nth-child(3) { height:20px; animation-delay:.2s; }
 .voice-waves span:nth-child(4) { height:12px; animation-delay:.3s; }
 .voice-waves span:nth-child(5) { height:6px;  animation-delay:.4s; }
+
+.cache-badge {
+  font-size: 11px;
+  color: var(--fg-4);
+  margin-top: 6px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.04);
+  display: inline-block;
+}
 @keyframes wave-bar {
   0%,100% { transform:scaleY(1); }
   50% { transform:scaleY(1.6); }

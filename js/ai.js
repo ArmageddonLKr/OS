@@ -61,8 +61,57 @@ export class AI {
         const txt = (lastUser?.content || '').toLowerCase();
         return {
             faith: /\b(fé|fe|deus|jesus|cristo|bíblia|biblia|oração|oracao|versículo|versiculo|salmo|evangelho|igreja|culto|espírito|espirito|graça|graca)\b/.test(txt),
-            study: /\b(estudo|estudar|prova|concurso|vestibular|matéria|materia|resumo|revisão|revisao|questão|questao|exercício|exercicio|dificuldade|aprender)\b/.test(txt)
+            study: /\b(estudo|estudar|prova|concurso|vestibular|matéria|materia|resumo|revisão|revisao|questão|questao|exercício|exercicio|dificuldade|aprender)\b/.test(txt),
+            finance: /\b(dinheiro|gasto|gastos|despesa|saldo|renda|sal[aá]rio|pagamento|d[ií]vida|custo|finan[cç]|budget|or[cç]amento)\b/.test(txt),
+            health: /\b(h[aá]bito|treino|exerc[ií]cio|[aá]gua|sono|dormir|acordar|cansado|energia|sa[uú]de|peso|imc)\b/.test(txt),
+            project: /\b(dax|nupieepro|projeto|freelance|cliente|site|design|entrega|prazo|orbit|kanban)\b/.test(txt),
         };
+    }
+
+    static _financeCtx() {
+        try {
+            const fin = JSON.parse(localStorage.getItem('orbit_finance') || '{"income":0,"expenses":0}');
+            const bal = (fin.income || 0) - (fin.expenses || 0);
+            const fmt = n => `R$ ${Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+            return `\n\n## FINANÇAS (mês atual)\nSaldo: ${fmt(bal)}${bal < 0 ? ' ⚠️ negativo' : ''} · Entradas: ${fmt(fin.income || 0)} · Saídas: ${fmt(fin.expenses || 0)}`;
+        } catch (_) { return ''; }
+    }
+
+    static _habitsCtx() {
+        try {
+            const habits = JSON.parse(localStorage.getItem('orbit_habits') || '[]');
+            if (!habits.length) return '';
+            const today = this.nowBR().toISOString().slice(0, 10);
+            const done = habits.filter(h => (h.done || []).includes(today));
+            const pending = habits.filter(h => !(h.done || []).includes(today));
+            let ctx = `\n\n## HÁBITOS HOJE\n${done.length}/${habits.length} concluídos`;
+            if (done.length) ctx += `\nFeitos: ${done.map(h => h.name).join(', ')}`;
+            if (pending.length) ctx += `\nPendentes: ${pending.map(h => h.name).join(', ')}`;
+            return ctx;
+        } catch (_) { return ''; }
+    }
+
+    static _projectCtx() {
+        try {
+            const kb = JSON.parse(localStorage.getItem('orbit_kanban') || '{}');
+            const doing = (kb.doing || []).map(c => c.text).slice(0, 4);
+            if (!doing.length) return '';
+            return `\n\n## PROJETOS EM ANDAMENTO\n${doing.map(t => `- ${t}`).join('\n')}`;
+        } catch (_) { return ''; }
+    }
+
+    static _weatherCtx() {
+        try {
+            const raw = sessionStorage.getItem('orbit_weather');
+            if (!raw) return '';
+            const data = JSON.parse(raw);
+            const cur = data?.current;
+            if (!cur) return '';
+            const temp = Math.round(cur.temperature_2m ?? 0);
+            const hum = cur.relativehumidity_2m ?? 0;
+            const wind = Math.round(cur.windspeed_10m ?? 0);
+            return `\nCLIMA TERESINA: ${temp}°C · Umidade ${hum}% · Vento ${wind}km/h`;
+        } catch (_) { return ''; }
     }
 
     static buildSys(msgs = []) {
@@ -88,6 +137,11 @@ export class AI {
         if (topics.study) {
             contextExtra += '\n\n## MODO ESTUDO\nO usuário está estudando. Seja didático, use exemplos concretos, estruture bem as explicações.';
         }
+        if (topics.finance) contextExtra += this._financeCtx();
+        if (topics.health) contextExtra += this._habitsCtx();
+        if (topics.project) contextExtra += this._projectCtx();
+        const wCtx = this._weatherCtx();
+        if (wCtx) contextExtra += wCtx;
 
         const sys = c.prompt || DEFAULT_PROMPT;
         return `${sys}\n\nCONTEXTO:\nAGORA: ${dtBR}\nTOM: ${tone}${sundayNote}${this.absenceNote()}${this._stressHint}\n\n${Store.getNuc()}${epBlock}${this.agendaContext()}${contextExtra}`;
