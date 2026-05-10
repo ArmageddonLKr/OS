@@ -1,8 +1,9 @@
-const CACHE = 'orbit-v15';
+const CACHE = 'orbit-v16';
 const SHELL = [
   './',
   './index.html',
   './css/style.css',
+  './css/modules.css',
   './js/app.js',
   './js/store.js',
   './js/ai.js',
@@ -10,6 +11,11 @@ const SHELL = [
   './js/tools.js',
   './js/study.js',
   './js/faith.js',
+  './js/finance.js',
+  './js/habits.js',
+  './js/vault.js',
+  './js/entertainment.js',
+  './js/agenda.js',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',

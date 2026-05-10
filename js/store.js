@@ -17,8 +17,14 @@ export const K = {
     flash:  'orbit_flash',
     kanban: 'orbit_kanban',
     ideas:  'orbit_ideas',
-    habits: 'orbit_habits',
-    finance:'orbit_finance'
+    habits:   'orbit_habits',
+    finance:  'orbit_finance',
+    fin_tx:   'orbit_finance_tx',
+    grades:   'orbit_grades',
+    contacts: 'orbit_contacts',
+    ps5:      'orbit_ps5',
+    fe_j:     'orbit_fe_journal',
+    fe_p:     'orbit_fe_prayers',
 };
 
 export const DEFAULT_PROMPT = `Você é ORBIT SOPHY — nascida em 04/02/2026 às 14h37.

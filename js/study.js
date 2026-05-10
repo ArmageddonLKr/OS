@@ -86,6 +86,54 @@ export class University {
     }
 }
 
+/* Grades & Faltas — UFPI */
+export class Grades {
+    static get() { return Store.get('orbit_grades', []); }
+    static save(a) { Store.set('orbit_grades', a); }
+
+    static sync() {
+        const disc = Store.get('orbit_disc', []);
+        const grades = this.get();
+        const synced = disc.map(d => {
+            const existing = grades.find(g => g.discId === d.id);
+            return existing || { discId: d.id, name: d.name, notas: [null, null], faltas: 0, cargaHoraria: 60 };
+        });
+        this.save(synced);
+        return synced;
+    }
+
+    static update(discId, changes) {
+        const all = this.get();
+        const idx = all.findIndex(g => g.discId === discId);
+        if (idx >= 0) { all[idx] = { ...all[idx], ...changes }; this.save(all); }
+    }
+
+    static calcMedia(notas) {
+        const valid = notas.filter(n => n !== null && n !== '');
+        if (!valid.length) return null;
+        return valid.reduce((s, n) => s + parseFloat(n), 0) / valid.length;
+    }
+
+    static statusFor(media, faltas, cargaHoraria = 60) {
+        const maxFaltas = cargaHoraria * 0.25;
+        if (faltas > maxFaltas) return 'reprovado_faltas';
+        if (media === null) return 'cursando';
+        if (media >= 7) return 'aprovado';
+        if (media >= 4) return 'final';
+        return 'reprovado';
+    }
+
+    static calcCR(grades) {
+        const valid = grades.filter(g => {
+            const m = this.calcMedia(g.notas);
+            return m !== null;
+        });
+        if (!valid.length) return null;
+        const total = valid.reduce((s, g) => s + this.calcMedia(g.notas), 0);
+        return (total / valid.length).toFixed(2);
+    }
+}
+
 /* [#119] Idea Vault Engine */
 export class IdeaVault {
     static get() { return Store.get('orbit_ideas', []); }
