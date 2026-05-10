@@ -843,8 +843,11 @@ body {
 
 /* ── CHAT VIEW ────────────────────────────────────── */
 .chat-view {
-  position: absolute;
-  inset: 0;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--vvh, 100dvh);
   display: flex;
   flex-direction: column;
   background: var(--void);

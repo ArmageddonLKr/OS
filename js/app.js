@@ -153,7 +153,7 @@ class App {
             if (navigator.vibrate) navigator.vibrate(50);
             this.enterApp();
         } else {
-            if (this.pinBuffer === stored) {
+            if (this.pinBuffer === String(stored)) {
                 this.pinBuffer = '';
                 this.updatePinDots();
                 if (navigator.vibrate) navigator.vibrate(50);
@@ -174,6 +174,9 @@ class App {
     enterApp() {
         const pin = document.getElementById('pinscreen');
         if (!pin) return;
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission().catch(() => {});
+        }
         pin.style.opacity = '0';
         pin.style.transition = 'opacity 0.35s';
         setTimeout(() => {
@@ -1300,6 +1303,9 @@ class App {
             });
             setTimeout(() => ctx.close(), 1500);
         } catch {}
+        if ('Notification' in window && Notification.permission === 'granted') {
+            try { new Notification('OS', { body: 'Pomodoro completo! Hora da pausa.', icon: './icon-192.png', silent: true }); } catch {}
+        }
     }
 
     /* ═══════════════════════════════════════════════
@@ -1979,7 +1985,7 @@ class App {
                 (delta) => {
                     this.fullResponse += delta;
                     const el = document.getElementById('sb');
-                    if (el) el.innerHTML = this.fullResponse;
+                    if (el) el.textContent = this.fullResponse;
                     const msgs = document.getElementById('msgs');
                     if (msgs) msgs.scrollTop = msgs.scrollHeight;
                 }
@@ -2661,11 +2667,19 @@ class App {
 
     /* ── UTILS ── */
     fixViewport() {
-        if (!window.visualViewport) return;
-        window.visualViewport.addEventListener('resize', () => {
-            const chat = document.getElementById('chat');
-            if (chat && chat.style.display !== 'none') chat.style.height = window.visualViewport.height + 'px';
-        });
+        const update = () => {
+            const vvh = window.visualViewport?.height ?? window.innerHeight;
+            document.documentElement.style.setProperty('--vvh', `${vvh}px`);
+            const msgs = document.getElementById('msgs');
+            if (msgs) requestAnimationFrame(() => { msgs.scrollTop = msgs.scrollHeight; });
+        };
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', update);
+            window.visualViewport.addEventListener('scroll', update);
+        } else {
+            window.addEventListener('resize', update);
+        }
+        update();
     }
 
     initOrb() {
