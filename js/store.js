@@ -25,6 +25,8 @@ export const K = {
     ps5:      'orbit_ps5',
     fe_j:     'orbit_fe_journal',
     fe_p:     'orbit_fe_prayers',
+    convs:    'orbit_convs',
+    curConv:  'orbit_cur_conv',
 };
 
 export const DEFAULT_PROMPT = `Você é ORBIT SOPHY — nascida em 04/02/2026 às 14h37.
@@ -178,5 +180,96 @@ export class Store {
             });
         }
         this.set(K.ep, a, true);
+    }
+
+    /* ── Conversations (multi-chat history) ─────────── */
+    static getConvs() {
+        let list = this.get(K.convs, null);
+        if (list === null) {
+            const legacy = this.get('orbit_msgs', []);
+            const title = legacy.find(m => m.role === 'user')?.content?.slice(0, 40) || 'Primeira conversa';
+            const conv = { id: 'c' + Date.now(), title, ts: Date.now(), msgs: Array.isArray(legacy) ? legacy : [] };
+            list = [conv];
+            this.set(K.convs, list);
+            this.set(K.curConv, conv.id);
+        }
+        return list;
+    }
+
+    static saveConvs(list) { this.set(K.convs, list); }
+
+    static getCurConvId() {
+        let id = localStorage.getItem(K.curConv);
+        const list = this.getConvs();
+        if (!id || !list.find(c => c.id === id)) {
+            id = list[0]?.id || null;
+            if (id) localStorage.setItem(K.curConv, id);
+        }
+        return id;
+    }
+
+    static setCurConvId(id) { localStorage.setItem(K.curConv, id); }
+
+    static getCurConv() {
+        const list = this.getConvs();
+        const id = this.getCurConvId();
+        let conv = list.find(c => c.id === id);
+        if (!conv) {
+            conv = { id: 'c' + Date.now(), title: 'Nova conversa', ts: Date.now(), msgs: [] };
+            list.push(conv);
+            this.saveConvs(list);
+            this.setCurConvId(conv.id);
+        }
+        return conv;
+    }
+
+    static getCurMsgs() { return this.getCurConv().msgs || []; }
+
+    static saveCurMsgs(msgs) {
+        const list = this.getConvs();
+        const id = this.getCurConvId();
+        const idx = list.findIndex(c => c.id === id);
+        if (idx < 0) return;
+        list[idx].msgs = msgs.slice(-100);
+        list[idx].ts = Date.now();
+        const autoTitle = !list[idx].title
+            || list[idx].title === 'Nova conversa'
+            || list[idx].title === 'Primeira conversa'
+            || list[idx]._auto;
+        if (autoTitle) {
+            const firstUser = msgs.find(m => m.role === 'user');
+            if (firstUser) {
+                list[idx].title = (firstUser.content || '').replace(/\s+/g, ' ').trim().slice(0, 42) || 'Nova conversa';
+                delete list[idx]._auto;
+            }
+        }
+        this.saveConvs(list);
+    }
+
+    static newConv() {
+        const list = this.getConvs();
+        const conv = { id: 'c' + Date.now(), title: 'Nova conversa', ts: Date.now(), msgs: [] };
+        list.push(conv);
+        this.saveConvs(list);
+        this.setCurConvId(conv.id);
+        return conv;
+    }
+
+    static removeConv(id) {
+        let list = this.getConvs().filter(c => c.id !== id);
+        if (!list.length) {
+            const conv = { id: 'c' + Date.now(), title: 'Nova conversa', ts: Date.now(), msgs: [] };
+            list = [conv];
+        }
+        this.saveConvs(list);
+        if (this.getCurConvId() === id) this.setCurConvId(list[0].id);
+    }
+
+    static renameConv(id, title) {
+        const list = this.getConvs();
+        const idx = list.findIndex(c => c.id === id);
+        if (idx < 0) return;
+        list[idx].title = (title || 'Sem título').slice(0, 60);
+        this.saveConvs(list);
     }
 }

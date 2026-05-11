@@ -132,17 +132,26 @@ export class Entertainment {
 
     /* ── Transfermarkt: busca time ──────────────────── */
     static async searchTMTeam(query) {
-        try {
-            const r = await fetch(`${TM_BASE}/clubs/search?query=${encodeURIComponent(query)}`, { signal: AbortSignal.timeout(8000) });
-            if (!r.ok) return [];
-            const d = await r.json();
-            const clubs = d?.results || d?.clubs || [];
-            return clubs.slice(0, 5).map(t => ({
-                tmId: String(t.id),
-                name: t.name,
-                country: t.country?.name || ''
-            }));
-        } catch { return []; }
+        const q = encodeURIComponent(query);
+        const urls = [
+            `${TM_BASE}/clubs/search/${q}`,
+            `${TM_BASE}/clubs/search?query=${q}`
+        ];
+        for (const u of urls) {
+            try {
+                const r = await fetch(u, { signal: AbortSignal.timeout(8000) });
+                if (!r.ok) continue;
+                const d = await r.json();
+                const clubs = d?.results || d?.clubs || d?.items || [];
+                if (!clubs.length) continue;
+                return clubs.slice(0, 6).map(t => ({
+                    tmId: String(t.id || t.club_id || t.clubID || ''),
+                    name: t.name || t.club_name || t.title || '',
+                    country: t.country?.name || t.country || ''
+                })).filter(t => t.tmId && t.name);
+            } catch { /* try next */ }
+        }
+        return [];
     }
 
     /* ── Transfermarkt: transferências ──────────────── */
@@ -151,18 +160,65 @@ export class Entertainment {
         const key = `ent_tm_${tmId}`;
         const hit = scGet(key);
         if (hit) return hit;
-        try {
-            const r = await fetch(`${TM_BASE}/clubs/${tmId}/transfers`, { signal: AbortSignal.timeout(12000) });
-            if (!r.ok) return null;
-            const d = await r.json();
-            const tx = d?.transfers || d;
-            const result = {
-                arrivals: (tx?.arrivals || []).slice(0, 12),
-                departures: (tx?.departures || []).slice(0, 12)
-            };
-            scSet(key, result);
-            return result;
-        } catch { return null; }
+
+        const season = this._currentTMSeason();
+        const urls = [
+            `${TM_BASE}/clubs/${tmId}/transfers?season_id=${season}`,
+            `${TM_BASE}/clubs/${tmId}/transfers/${season}`,
+            `${TM_BASE}/clubs/${tmId}/transfers`
+        ];
+
+        for (const u of urls) {
+            try {
+                const r = await fetch(u, { signal: AbortSignal.timeout(12000) });
+                if (!r.ok) continue;
+                const d = await r.json();
+                const result = this._parseTransfers(d);
+                if (result.arrivals.length || result.departures.length) {
+                    scSet(key, result);
+                    return result;
+                }
+            } catch { /* try next */ }
+        }
+        return null;
+    }
+
+    static _currentTMSeason() {
+        const now = new Date();
+        // Temporada europeia: Jul-Jun. Antes de jul → temporada anterior.
+        return now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+    }
+
+    static _parseTransfers(d) {
+        const buckets = d?.transfers || d;
+        let arrivalsRaw = buckets?.arrivals || buckets?.in || buckets?.arriving || [];
+        let departuresRaw = buckets?.departures || buckets?.out || buckets?.leaving || [];
+
+        // Forma alternativa: lista única com "direction" ou "movement"
+        if (!arrivalsRaw.length && !departuresRaw.length && Array.isArray(buckets)) {
+            arrivalsRaw = buckets.filter(t => (t.direction || t.movement || '').toLowerCase().startsWith('in') || t.type === 'arrival');
+            departuresRaw = buckets.filter(t => (t.direction || t.movement || '').toLowerCase().startsWith('out') || t.type === 'departure');
+        }
+
+        const norm = (t) => ({
+            name: t.name || t.player_name || t.playerName || t.player?.name || '?',
+            position: t.position || t.player?.position || t.role || '',
+            from: t.from?.name || t.from_club_name || t.left_team?.name || t.club_from?.name || t.fromClub || '?',
+            to:   t.to?.name   || t.to_club_name   || t.joined_team?.name || t.club_to?.name   || t.toClub   || '?',
+            fee: t.fee || t.transfer_fee || t.transferFee || t.cost || '—',
+            market_value: t.market_value || t.marketValue || t.value || ''
+        });
+
+        return {
+            arrivals:   arrivalsRaw.slice(0, 14).map(norm),
+            departures: departuresRaw.slice(0, 14).map(norm)
+        };
+    }
+
+    /* ── Wikipedia URL fallback p/ transferências ──── */
+    static transfermarktURL(tmId, teamName) {
+        if (tmId) return `https://www.transfermarkt.com/club/transfers/verein/${tmId}`;
+        return `https://www.transfermarkt.com/schnellsuche/ergebnis/schnellsuche?query=${encodeURIComponent(teamName || '')}`;
     }
 
     /* ── HackerNews: notícias tech ──────────────────── */
