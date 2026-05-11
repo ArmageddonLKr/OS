@@ -1762,7 +1762,7 @@ class App {
                     <span class="stc-flag">${t.flag || '⚽'}</span>
                     <span class="stc-name">${t.name}</span>
                     <div class="stc-actions">
-                        ${t.tmId ? `<button class="stc-btn-sm" onclick="orbit.sportViewTransfers('${t.tmId}','${t.name}')">Transf.</button>` : ''}
+                        <button class="stc-btn-sm" onclick="orbit.sportViewTransfers('${t.tmId || ''}', ${JSON.stringify(t.name).replace(/"/g,'&quot;')})">Transf.</button>
                         <button class="stc-del" onclick="orbit.sportRemoveTeam('${t.id}')">×</button>
                     </div>
                 </div>
@@ -1834,7 +1834,7 @@ class App {
             <div class="sport-result-item" onclick="orbit._sportSelectResult(${i})">
                 <div class="sri-name">${t.name}</div>
                 <div class="sri-sub" style="color:${t.tmId ? 'var(--ok)' : 'var(--fg-4)'}">
-                    ${t.tmId ? `✓ Transferências: ${t.tmName}` : 'Sem dados de transferência'}
+                    ${t.tmId ? `✓ Transferências TM: ${t.tmName}` : 'Transferências via link Transfermarkt'}
                 </div>
             </div>
         `).join('');
@@ -1873,27 +1873,35 @@ class App {
         if (!ctx || !ctxBody) return;
 
         if (titleEl) titleEl.textContent = 'TRANSFERÊNCIAS';
-        if (dateEl) dateEl.textContent = teamName.toUpperCase();
+        if (dateEl) dateEl.textContent = (teamName || '').toUpperCase();
         ctxBody.innerHTML = '<div style="padding:20px 0;text-align:center;color:var(--fg-4);font-size:13px">Carregando Transfermarkt...</div>';
         ctx.style.display = 'flex';
 
-        const data = await Entertainment.getTeamTransfers(tmId);
-        if (!data) {
-            ctxBody.innerHTML = '<div style="padding:20px;color:var(--fg-4);font-size:13px">Indisponível. Verifique a conexão.</div>';
+        const data = tmId ? await Entertainment.getTeamTransfers(tmId) : null;
+        const tmURL = Entertainment.transfermarktURL(tmId, teamName);
+
+        const fallback = `<div style="padding:24px 16px;text-align:center">
+            <div style="color:var(--fg-3);font-size:13px;line-height:1.6;margin-bottom:14px">
+                Não consegui buscar as transferências automaticamente agora.<br>
+                <span style="color:var(--fg-4);font-size:12px">A API pode estar fora do ar ou o time não tem cadastro.</span>
+            </div>
+            <a href="${tmURL}" target="_blank" rel="noopener" class="btn btn-primary" style="display:inline-block;text-decoration:none;padding:10px 18px">
+                ABRIR NO TRANSFERMARKT
+            </a>
+        </div>`;
+
+        if (!data || (!data.arrivals?.length && !data.departures?.length)) {
+            ctxBody.innerHTML = fallback;
             return;
         }
 
         const renderTx = t => {
-            const name = t.name || t.player_name || '?';
-            const from = t.from_club_name || t.left_team?.name || '?';
-            const to = t.to_club_name || t.joined_team?.name || '?';
-            const fee = t.fee || t.transfer_fee || '—';
+            const fee = t.fee || '—';
             const mv = t.market_value || '';
-            const pos = t.position || '';
             return `<div style="padding:10px 0;border-bottom:1px solid var(--line-1)">
-                <div style="font-size:13px;font-weight:600;color:var(--fg-1)">${name}</div>
-                ${pos ? `<div style="font-size:11px;color:var(--fg-4)">${pos}</div>` : ''}
-                <div style="font-size:12px;color:var(--fg-3);margin-top:2px">${from} → ${to}</div>
+                <div style="font-size:13px;font-weight:600;color:var(--fg-1)">${t.name}</div>
+                ${t.position ? `<div style="font-size:11px;color:var(--fg-4)">${t.position}</div>` : ''}
+                <div style="font-size:12px;color:var(--fg-3);margin-top:2px">${t.from} → ${t.to}</div>
                 <div style="font-size:12px;color:var(--gold);font-weight:600">${fee}${mv ? ` · VM: ${mv}` : ''}</div>
             </div>`;
         };
@@ -1904,7 +1912,9 @@ class App {
         ctxBody.innerHTML = `<div style="padding:0 16px 24px">
             ${arrivals.length ? `<div style="padding:12px 0 8px;color:var(--ok);font-size:11px;font-weight:700;letter-spacing:1px">CHEGADAS</div>${arrivals.map(renderTx).join('')}` : ''}
             ${departures.length ? `<div style="padding:12px 0 8px;color:var(--err);font-size:11px;font-weight:700;letter-spacing:1px">SAÍDAS</div>${departures.map(renderTx).join('')}` : ''}
-            ${!arrivals.length && !departures.length ? '<div style="color:var(--fg-4);font-size:13px;padding:16px 0">Sem transferências na temporada atual.</div>' : ''}
+            <div style="margin-top:14px;text-align:center">
+                <a href="${tmURL}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-4);text-decoration:underline">Ver mais no Transfermarkt</a>
+            </div>
         </div>`;
     }
 
@@ -2032,18 +2042,7 @@ class App {
         const hdrName = document.getElementById('hdr-name');
         if (hdrName) hdrName.textContent = cfg.name.toUpperCase();
 
-        const history = Store.get('orbit_msgs', []);
-        if (history.length > 0) {
-            const empty = document.getElementById('empty');
-            if (empty) empty.style.display = 'none';
-            history.slice(-20).forEach(m => {
-                if (m.role === 'user' || m.role === 'assistant') {
-                    UI.addMsg(m.role === 'user' ? 'user' : 'sophy', m.content || '', false, null);
-                }
-            });
-            const msgs = document.getElementById('msgs');
-            if (msgs) msgs.scrollTop = msgs.scrollHeight;
-        }
+        this._renderChatFromCurrent();
         UI.setStatus('online');
 
         const today = AI.nowBR().toISOString().slice(0, 10);
@@ -2051,6 +2050,104 @@ class App {
             localStorage.setItem('orbit_daily_q', today);
             setTimeout(() => this._askDailyQuestion(), 1800);
         }
+    }
+
+    _renderChatFromCurrent() {
+        const msgsEl = document.getElementById('msgs');
+        if (!msgsEl) return;
+        // Limpa mas mantém o estado vazio
+        const empty = document.getElementById('empty');
+        msgsEl.innerHTML = '';
+        if (empty) msgsEl.appendChild(empty);
+
+        const history = Store.getCurMsgs();
+        if (history.length) {
+            if (empty) empty.style.display = 'none';
+            history.slice(-20).forEach(m => {
+                if (m.role === 'user' || m.role === 'assistant') {
+                    UI.addMsg(m.role === 'user' ? 'user' : 'sophy', m.content || '', false, null);
+                }
+            });
+            msgsEl.scrollTop = msgsEl.scrollHeight;
+        } else if (empty) {
+            empty.style.display = 'flex';
+        }
+        this._updateConvTitle();
+    }
+
+    _updateConvTitle() {
+        const conv = Store.getCurConv();
+        const el = document.getElementById('hdr-conv-title');
+        if (el) el.textContent = conv.title || 'Nova conversa';
+    }
+
+    /* ── CONVERSATION HISTORY ── */
+    openConvList() {
+        const m = document.getElementById('conv-modal');
+        if (!m) return;
+        this._renderConvList();
+        m.style.display = 'flex';
+    }
+
+    closeConvList() {
+        const m = document.getElementById('conv-modal');
+        if (m) m.style.display = 'none';
+    }
+
+    _renderConvList() {
+        const list = document.getElementById('conv-list');
+        if (!list) return;
+        const convs = [...Store.getConvs()].sort((a, b) => (b.ts || 0) - (a.ts || 0));
+        const curId = Store.getCurConvId();
+
+        list.innerHTML = convs.map(c => {
+            const last = (c.msgs || []).slice(-1)[0];
+            const snippet = last ? (last.content || '').replace(/\s+/g, ' ').trim().slice(0, 60) : 'Sem mensagens';
+            const when = c.ts ? new Date(c.ts).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '';
+            const active = c.id === curId ? ' conv-item-active' : '';
+            return `<div class="conv-item${active}" data-id="${c.id}">
+                <div class="conv-item-body" onclick="orbit.switchConv('${c.id}')">
+                    <div class="conv-item-title">${(c.title || 'Sem título').replace(/</g,'&lt;')}</div>
+                    <div class="conv-item-snippet">${snippet.replace(/</g,'&lt;')}</div>
+                </div>
+                <div class="conv-item-meta">
+                    <span class="conv-item-date">${when}</span>
+                    <button class="conv-item-del" onclick="event.stopPropagation();orbit.deleteConv('${c.id}')" title="Excluir">×</button>
+                </div>
+            </div>`;
+        }).join('');
+
+        if (!convs.length) {
+            list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--fg-4);font-size:13px">Nenhuma conversa ainda.</div>';
+        }
+    }
+
+    newConv() {
+        if (this.busy && this.abortCtrl) { this.abortCtrl.abort(); this.abortCtrl = null; this.busy = false; }
+        Store.newConv();
+        this._renderChatFromCurrent();
+        this.closeConvList();
+        UI.toast('Nova conversa iniciada', 'ok');
+        setTimeout(() => document.getElementById('msginput')?.focus(), 200);
+    }
+
+    switchConv(id) {
+        if (id === Store.getCurConvId()) { this.closeConvList(); return; }
+        if (this.busy && this.abortCtrl) { this.abortCtrl.abort(); this.abortCtrl = null; this.busy = false; }
+        Store.setCurConvId(id);
+        this._renderChatFromCurrent();
+        this.closeConvList();
+        setTimeout(() => document.getElementById('msginput')?.focus(), 200);
+    }
+
+    deleteConv(id) {
+        if (!confirm('Apagar essa conversa?')) return;
+        const wasActive = Store.getCurConvId() === id;
+        if (wasActive && this.busy && this.abortCtrl) { this.abortCtrl.abort(); this.abortCtrl = null; this.busy = false; }
+        Store.removeConv(id);
+        if (wasActive) this._renderChatFromCurrent();
+        this._renderConvList();
+        UI.toast('Conversa apagada', 'ok');
     }
 
     async _askDailyQuestion() {
@@ -2075,11 +2172,11 @@ class App {
         if (!text && !this.pendingImage) return;
 
         if (text === '/esquece') {
-            Store.set('orbit_msgs', []);
-            document.getElementById('msgs').innerHTML = '';
-            document.getElementById('empty').style.display = 'flex';
+            Store.saveCurMsgs([]);
+            this._renderChatFromCurrent();
             UI.toast('Sessão limpa.', 'ok');
             inp.value = '';
+            inp.focus();
             return;
         }
         if (text.startsWith('!ideia ')) {
@@ -2123,11 +2220,17 @@ class App {
         UI.addMsg('user', text, false, this.pendingImage);
         inp.value = '';
         inp.style.height = 'auto';
+        // Mantém o teclado aberto após o envio (mobile)
+        this._keepKeyboard = true;
+        try { inp.focus({ preventScroll: true }); } catch (_) { inp.focus(); }
+        setTimeout(() => this._keepKeyboard = false, 400);
 
-        const history = Store.get('orbit_msgs', []);
+        const history = Store.getCurMsgs();
         const userMsg = { role: 'user', content: text };
         if (this.pendingImage) userMsg.image = this.pendingImage;
         history.push(userMsg);
+        Store.saveCurMsgs(history);
+        this._updateConvTitle();
         this.pendingImage = null;
         this.removeAttach();
 
@@ -2184,7 +2287,8 @@ class App {
             }
 
             history.push({ role: 'assistant', content: this.fullResponse });
-            Store.set('orbit_msgs', history.slice(-100));
+            Store.saveCurMsgs(history);
+            this._updateConvTitle();
 
             if (history.length % 12 === 0) AI.summarizeSession(history);
             this._cacheResponse(text, this.fullResponse);
@@ -2204,7 +2308,7 @@ class App {
                 if (cached) {
                     if (finalEl) finalEl.innerHTML = UI.renderMd(cached.a) + '<div class="cache-badge">📦 resposta em cache (offline)</div>';
                     history.push({ role: 'assistant', content: cached.a });
-                    Store.set('orbit_msgs', history.slice(-100));
+                    Store.saveCurMsgs(history);
                 } else {
                     if (finalEl) finalEl.innerHTML = '<span class="merr">Sem conexão. Sem cache para esta pergunta.</span>';
                 }
@@ -2325,10 +2429,10 @@ class App {
         const inp = document.getElementById('msginput');
         if (inp) { inp.value = ''; inp.style.height = 'auto'; }
         if (cmd === 'esquece') {
-            Store.set('orbit_msgs', []);
-            document.getElementById('msgs').innerHTML = '';
-            document.getElementById('empty').style.display = 'flex';
+            Store.saveCurMsgs([]);
+            this._renderChatFromCurrent();
             UI.toast('Sessão limpa.', 'ok');
+            setTimeout(() => document.getElementById('msginput')?.focus(), 100);
         } else if (cmd === 'pinned') {
             this.showPinned();
         } else if (cmd === 'exportar') {
@@ -2805,15 +2909,41 @@ class App {
 
     /* ── SETUP LISTENERS ── */
     setupListeners() {
-        document.getElementById('sendbtn')?.addEventListener('click', () => this.handleSend());
+        const sendBtn = document.getElementById('sendbtn');
+        sendBtn?.addEventListener('click', () => this.handleSend());
+        // Mobile: evita que o tap no botão tire o foco do textarea (mantém o teclado aberto)
+        sendBtn?.addEventListener('mousedown', e => e.preventDefault());
+        sendBtn?.addEventListener('pointerdown', e => e.preventDefault());
+
+        // Mesma proteção para o botão de cancelar streaming
+        const cancelBtn = document.getElementById('cancel-btn');
+        cancelBtn?.addEventListener('mousedown', e => e.preventDefault());
+        cancelBtn?.addEventListener('pointerdown', e => e.preventDefault());
+
+        // Proteção também para os botões de anexar/câmera/voz (não roubam foco)
+        document.querySelectorAll('.inp-area .inp-btn').forEach(b => {
+            b.addEventListener('mousedown', e => e.preventDefault());
+        });
 
         const inp = document.getElementById('msginput');
         if (inp) {
             inp.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.handleSend(); }
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    this.handleSend();
+                    // Recoloca o foco no próximo tick (alguns Androids tiram durante o handler)
+                    setTimeout(() => inp.focus(), 0);
+                }
                 if (e.key === 'Escape') this.hideCmdPalette();
             });
             inp.addEventListener('input', () => this.handleInput());
+            // Se o textarea perder foco logo após enviar (Android), retoma
+            inp.addEventListener('blur', () => {
+                if (this._keepKeyboard) {
+                    this._keepKeyboard = false;
+                    setTimeout(() => inp.focus(), 0);
+                }
+            });
         }
 
         document.querySelectorAll('.tab').forEach(t => {
