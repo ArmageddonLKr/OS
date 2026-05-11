@@ -1,4 +1,4 @@
-const CACHE = 'orbit-v21';
+const CACHE = 'orbit-v22';
 const SHELL = [
   './',
   './index.html',
