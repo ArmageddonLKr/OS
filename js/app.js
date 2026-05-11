@@ -1742,7 +1742,69 @@ class App {
             }
         }
 
+        this._renderFighters();
         this._renderPS5();
+    }
+
+    /* ── BOXE / MMA — LUTADORES ─────────────────────── */
+    _renderFighters() {
+        const el = document.getElementById('fighter-list');
+        if (!el) return;
+        const fighters = Entertainment.getFighters();
+        if (!fighters.length) {
+            el.innerHTML = `<div class="fin-empty" style="padding:14px 0;text-align:center;line-height:1.8">
+                Nenhum lutador ainda.<br><span style="font-size:12px;color:var(--fg-4)">Adicione um nome abaixo.</span>
+            </div>`;
+            return;
+        }
+        const sportLabel = { boxing: '🥊 Boxe', ufc: '🥋 UFC', pfl: '🥋 PFL', bellator: '🥋 Bellator' };
+        el.innerHTML = fighters.map(f => `
+            <div class="fighter-card">
+                <div class="fc-hdr">
+                    <span class="fc-sport">${sportLabel[f.sport] || '🥊'}</span>
+                    <span class="fc-name">${(f.name || '').replace(/</g,'&lt;')}</span>
+                    <button class="stc-del" onclick="orbit.removeFighter('${f.id}')">×</button>
+                </div>
+                <div class="fc-event" id="fce-${f.id}"><span style="color:var(--fg-4);font-size:12px">Buscando próxima luta...</span></div>
+            </div>
+        `).join('');
+
+        fighters.forEach(f => this._loadFighterEvent(f));
+    }
+
+    async _loadFighterEvent(fighter) {
+        const el = document.getElementById(`fce-${fighter.id}`);
+        if (!el) return;
+        const ev = await Entertainment.getFighterNextEvent(fighter);
+        if (!ev) {
+            el.innerHTML = '<span style="color:var(--fg-4);font-size:12px">Sem luta marcada nas próximas semanas.</span>';
+            return;
+        }
+        const { fmtDate, fmtTime } = Entertainment.formatGameDate(ev.date);
+        const tag = ev.live ? '🔴 AO VIVO' : `${fmtDate} · ${fmtTime}`;
+        const card = ev.name || (ev.fighters || []).join(' vs ');
+        el.innerHTML = `
+            <div class="fc-event-title">${card.replace(/</g,'&lt;')}</div>
+            <div class="fc-event-meta">${tag}${ev.venue ? ` · ${ev.venue}` : ''}</div>
+        `;
+    }
+
+    addFighter() {
+        const nameEl = document.getElementById('fighter-name-inp');
+        const sportEl = document.getElementById('fighter-sport-sel');
+        const name = nameEl?.value.trim();
+        const sport = sportEl?.value || 'boxing';
+        if (!name) return UI.toast('Digite o nome do lutador!', 'err');
+        Entertainment.addFighter(name, sport);
+        if (nameEl) nameEl.value = '';
+        this._renderFighters();
+        UI.toast('Lutador adicionado!', 'ok');
+    }
+
+    removeFighter(id) {
+        Entertainment.removeFighter(id);
+        this._renderFighters();
+        if (navigator.vibrate) navigator.vibrate(30);
     }
 
     /* ── TIMES ──────────────────────────────────────── */
@@ -1931,12 +1993,13 @@ class App {
             el.innerHTML = '<div style="color:var(--fg-4);font-size:13px">Sem conexão ou sem notícias.</div>';
             return;
         }
-        el.innerHTML = news.map(n => `
-            <a class="news-item" href="${n.url}" target="_blank" rel="noopener">
-                <div class="news-title">${n.title}</div>
-                <div class="news-meta">${n.score} pts · ${n.comments} comentários · ${n.time}</div>
-            </a>
-        `).join('');
+        el.innerHTML = news.map(n => {
+            const meta = [n.source, n.time].filter(Boolean).join(' · ');
+            return `<a class="news-item" href="${n.url}" target="_blank" rel="noopener">
+                <div class="news-title">${(n.title || '').replace(/</g,'&lt;')}</div>
+                <div class="news-meta">${meta.replace(/</g,'&lt;')}</div>
+            </a>`;
+        }).join('');
     }
 
     _renderPS5() {

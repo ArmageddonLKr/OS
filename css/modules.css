@@ -241,6 +241,15 @@
 .stcg-score { color: var(--gold); font-family: var(--fm); }
 .stcg-info { font-size: 11px; color: var(--fg-4); margin-top: 2px; font-family: var(--fm); }
 
+/* Lutadores (Boxe / MMA) */
+.fighter-card { margin: 0 14px 8px; background: var(--bg-2); border: 1px solid var(--line-1); border-radius: var(--r-md); padding: 12px 14px; }
+.fc-hdr { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.fc-sport { font-size: 12px; color: var(--fg-3); font-family: var(--fm); }
+.fc-name { font-size: 13px; font-weight: 600; color: var(--fg-1); flex: 1; }
+.fc-event { padding-left: 4px; }
+.fc-event-title { font-size: 13px; font-weight: 600; color: var(--fg-1); }
+.fc-event-meta { font-size: 11px; color: var(--fg-4); margin-top: 2px; font-family: var(--fm); }
+
 /* Busca de times */
 .sport-result-item { padding: 12px; border: 1px solid var(--line-1); border-radius: 10px; margin-bottom: 6px; cursor: pointer; background: var(--bg-3); -webkit-tap-highlight-color: transparent; }
 .sport-result-item:active { background: var(--bg-4); }
