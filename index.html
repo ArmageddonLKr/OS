@@ -489,6 +489,25 @@
             <div class="sport-sec-title" style="margin-top:16px">CLASSIFICAÇÃO — TOP 5</div>
             <div id="f1-standings" class="f1-table"></div>
 
+            <!-- Boxe / MMA -->
+            <div class="sport-sec-hdr" style="margin-top:20px">
+                <span class="sport-sec-title" style="margin:0">🥊 BOXE / MMA</span>
+            </div>
+            <div id="fighter-list"></div>
+            <div class="fe-add-form" style="padding:0 16px 16px">
+                <div class="plabel" style="margin-top:12px">Adicionar lutador</div>
+                <div style="display:flex;gap:8px">
+                    <input type="text" id="fighter-name-inp" placeholder="Nome do lutador (ex: Whindersson Nunes)" style="flex:1">
+                </div>
+                <select id="fighter-sport-sel" style="margin-top:6px;width:100%;box-sizing:border-box;background:var(--bg-4);border:1px solid var(--line-2);color:var(--fg-1);padding:10px 12px;border-radius:10px;font-size:13px;appearance:none">
+                    <option value="boxing">🥊 Boxe</option>
+                    <option value="ufc">🥋 UFC</option>
+                    <option value="pfl">🥋 PFL</option>
+                    <option value="bellator">🥋 Bellator</option>
+                </select>
+                <button class="btn btn-ghost" onclick="orbit.addFighter()" style="margin-top:6px">ADICIONAR LUTADOR</button>
+            </div>
+
             <!-- PS5 -->
             <div class="sport-sec-title" style="margin-top:20px">🎮 PS5</div>
             <div id="ps5-list" class="ps5-list"></div>

@@ -1,14 +1,20 @@
 /**
- * ENTERTAINMENT.JS — F1, Futebol, PS5, Tech News
+ * ENTERTAINMENT.JS — F1, Futebol, Boxe/MMA, PS5, Notícias
  */
 import { Store } from './store.js';
 
-const F1_BASE   = 'https://api.jolpi.ca/ergast/f1';
-const ESPN_BASE = 'https://site.api.espn.com/apis/site/v2/sports/soccer';
-const TM_BASE   = 'https://transfermarkt-api.fly.dev';
-const HN_BASE   = 'https://hacker-news.firebaseio.com/v0';
-const TTL       = 30 * 60 * 1000;
-const TTL_NEWS  = 20 * 60 * 1000;
+const F1_BASE     = 'https://api.jolpi.ca/ergast/f1';
+const ESPN_BASE   = 'https://site.api.espn.com/apis/site/v2/sports/soccer';
+const ESPN_BOXING = 'https://site.api.espn.com/apis/site/v2/sports/boxing';
+const ESPN_MMA    = 'https://site.api.espn.com/apis/site/v2/sports/mma';
+const TM_BASE     = 'https://transfermarkt-api.fly.dev';
+const RSS2JSON    = 'https://api.rss2json.com/v1/api.json';
+const TTL         = 30 * 60 * 1000;
+const TTL_NEWS    = 20 * 60 * 1000;
+
+function _norm(s) {
+    return (s || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
 
 function scGet(key, ttl = TTL) {
     try {
@@ -77,22 +83,32 @@ export class Entertainment {
         let list = scGet(cacheKey);
         if (!list) {
             try {
-                const r = await fetch(`${ESPN_BASE}/${league}/teams`, { signal: AbortSignal.timeout(8000) });
+                const r = await fetch(`${ESPN_BASE}/${league}/teams?limit=200`, { signal: AbortSignal.timeout(8000) });
                 if (!r.ok) return [];
                 const d = await r.json();
                 list = d?.sports?.[0]?.leagues?.[0]?.teams || [];
                 scSet(cacheKey, list);
             } catch { return []; }
         }
-        const q = query.toLowerCase();
-        return list
-            .filter(t =>
-                t.team?.displayName?.toLowerCase().includes(q) ||
-                t.team?.shortDisplayName?.toLowerCase().includes(q) ||
-                t.team?.name?.toLowerCase().includes(q)
-            )
-            .slice(0, 6)
-            .map(t => ({ espnId: t.team.id, name: t.team.displayName }));
+        const q = _norm(query).trim();
+        if (!q) return [];
+        const tokens = q.split(/\s+/).filter(Boolean);
+
+        const matches = list.filter(t => {
+            const names = [
+                t.team?.displayName,
+                t.team?.shortDisplayName,
+                t.team?.name,
+                t.team?.nickname,
+                t.team?.abbreviation
+            ].map(_norm).join(' ');
+            return tokens.every(tok => names.includes(tok));
+        });
+
+        return matches.slice(0, 8).map(t => ({
+            espnId: t.team.id,
+            name: t.team.displayName
+        }));
     }
 
     /* ── ESPN: próximo jogo do time ─────────────────── */
@@ -221,34 +237,118 @@ export class Entertainment {
         return `https://www.transfermarkt.com/schnellsuche/ergebnis/schnellsuche?query=${encodeURIComponent(teamName || '')}`;
     }
 
-    /* ── HackerNews: notícias tech ──────────────────── */
+    /* ── Notícias Tech (PT-BR via Google News) ──────── */
     static async getTechNews() {
-        const hit = scGet('ent_hn', TTL_NEWS);
+        const hit = scGet('ent_news_ptbr', TTL_NEWS);
         if (hit) return hit;
+
+        const feeds = [
+            'https://news.google.com/rss/search?q=tecnologia+OR+intelig%C3%AAncia+artificial+OR+programa%C3%A7%C3%A3o&hl=pt-BR&gl=BR&ceid=BR:pt-BR',
+            'https://news.google.com/rss/headlines/section/topic/TECHNOLOGY?hl=pt-BR&gl=BR&ceid=BR:pt-BR'
+        ];
+
+        for (const feed of feeds) {
+            try {
+                const url = `${RSS2JSON}?rss_url=${encodeURIComponent(feed)}&count=10`;
+                const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+                if (!r.ok) continue;
+                const d = await r.json();
+                const items = d?.items || [];
+                if (!items.length) continue;
+
+                const result = items.slice(0, 8).map(it => {
+                    const link = this._cleanGoogleNewsLink(it.link);
+                    const source = this._extractSource(it);
+                    return {
+                        title: (it.title || '').replace(/ - [^-]+$/, '').trim(),
+                        url: link,
+                        source,
+                        time: it.pubDate ? new Date(it.pubDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : ''
+                    };
+                }).filter(n => n.title);
+
+                scSet('ent_news_ptbr', result);
+                return result;
+            } catch { /* try next feed */ }
+        }
+        return [];
+    }
+
+    static _cleanGoogleNewsLink(link) {
+        if (!link) return '#';
+        // Google News RSS retorna URL de redirect — usamos direto, abre certinho no navegador.
+        return link;
+    }
+
+    static _extractSource(item) {
+        // rss2json devolve source dentro de `author` ou no final do título "Notícia X - Fonte"
+        if (item.author) return item.author;
+        const m = (item.title || '').match(/ - ([^-]+)$/);
+        return m ? m[1].trim() : '';
+    }
+
+    /* ── BOXE/MMA: lutadores favoritos ──────────────── */
+    static getFighters() { return Store.get('orbit_fighters', []); }
+    static saveFighters(f) { Store.set('orbit_fighters', f); }
+
+    static addFighter(name, sport) {
+        const list = this.getFighters();
+        const id = 'f' + Date.now();
+        list.push({ id, name: name.trim(), sport: sport || 'boxing' });
+        this.saveFighters(list);
+        return id;
+    }
+
+    static removeFighter(id) {
+        this.saveFighters(this.getFighters().filter(f => f.id !== id));
+    }
+
+    /* sport: 'boxing' | 'ufc' | 'pfl' | 'bellator' */
+    static async getCombatSchedule(sport) {
+        const key = `ent_combat_${sport}`;
+        const hit = scGet(key);
+        if (hit) return hit;
+        const base = sport === 'boxing' ? ESPN_BOXING : `${ESPN_MMA}/${sport}`;
         try {
-            const idsRes = await fetch(`${HN_BASE}/topstories.json`, { signal: AbortSignal.timeout(6000) });
-            const ids = await idsRes.json();
-            const top = ids.slice(0, 12);
-            const stories = await Promise.all(
-                top.map(id =>
-                    fetch(`${HN_BASE}/item/${id}.json`, { signal: AbortSignal.timeout(5000) })
-                        .then(r => r.json()).catch(() => null)
-                )
-            );
-            const result = stories
-                .filter(s => s && s.title && s.type === 'story')
-                .slice(0, 8)
-                .map(s => ({
-                    title: s.title,
-                    url: s.url || `https://news.ycombinator.com/item?id=${s.id}`,
-                    score: s.score || 0,
-                    by: s.by || '',
-                    comments: s.descendants || 0,
-                    time: s.time ? new Date(s.time * 1000).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : ''
-                }));
-            scSet('ent_hn', result);
-            return result;
+            const r = await fetch(`${base}/scoreboard`, { signal: AbortSignal.timeout(8000) });
+            if (!r.ok) return [];
+            const d = await r.json();
+            const events = (d?.events || []).map(e => {
+                const comp = e.competitions?.[0] || {};
+                const competitors = comp.competitors || [];
+                const fighters = competitors.map(c => c.athlete?.displayName || c.athlete?.name || c.displayName || '?').filter(Boolean);
+                return {
+                    id: e.id,
+                    name: e.name || e.shortName || '',
+                    date: e.date,
+                    status: comp.status?.type?.shortDetail || '',
+                    live: comp.status?.type?.name === 'STATUS_IN_PROGRESS',
+                    completed: comp.status?.type?.completed === true,
+                    fighters,
+                    venue: comp.venue?.fullName || ''
+                };
+            });
+            scSet(key, events);
+            return events;
         } catch { return []; }
+    }
+
+    static async getFighterNextEvent(fighter) {
+        const events = await this.getCombatSchedule(fighter.sport || 'boxing');
+        const fn = _norm(fighter.name);
+        const now = Date.now();
+        const tokens = fn.split(/\s+/).filter(Boolean);
+
+        const matches = events.filter(ev => {
+            if (ev.completed) return false;
+            const dt = new Date(ev.date).getTime();
+            if (dt < now - 3 * 3600000) return false;
+            const haystack = [_norm(ev.name), ...ev.fighters.map(_norm)].join(' ');
+            return tokens.every(t => haystack.includes(t));
+        });
+
+        matches.sort((a, b) => new Date(a.date) - new Date(b.date));
+        return matches[0] || null;
     }
 
     /* ── PS5 ────────────────────────────────────────── */
