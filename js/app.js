@@ -91,7 +91,7 @@ class App {
             const raw = Store.get(K.cfg, {});
             // Assinaturas dos prompts-padrão antigos (formal + v1 da psique). Se bater, sobe pra versão atual.
             // Não toca se o usuário escreveu o próprio prompt.
-            const oldSigs = ['Chama SEMPRE', 'JAMAIS "você"', 'Filha digital do JR', '(psique de verdade)', 'parceira de quebrada do JR', 'Esperta pra caramba'];
+            const oldSigs = ['Chama SEMPRE', 'JAMAIS "você"', 'Filha digital do JR', '(psique de verdade)', 'parceira de quebrada do JR', 'Esperta pra caramba', 'ciúme do tempo dele', 'AMA o JR'];
             if (raw && typeof raw.prompt === 'string' && oldSigs.some(s => raw.prompt.includes(s))) {
                 raw.prompt = DEFAULT_PROMPT;
                 Store.saveCfg(raw);
@@ -1995,17 +1995,24 @@ class App {
         </div>`;
     }
 
-    /* ── NOTÍCIAS TECH ──────────────────────────────── */
+    /* ── NOTÍCIAS ──────────────────────────────────── */
     _renderNewsSkeleton() {
         const el = document.getElementById('sport-news-list');
         if (el) el.innerHTML = '<div style="color:var(--fg-4);font-size:13px;padding:8px 0">Carregando notícias...</div>';
+    }
+
+    reloadNews() {
+        try { sessionStorage.removeItem('ent_news_mix'); sessionStorage.removeItem('ent_news_top'); sessionStorage.removeItem('ent_news_tech'); } catch (_) {}
+        this._renderNewsSkeleton();
+        Entertainment.getTechNews().then(news => this._renderNewsList(news));
     }
 
     _renderNewsList(news) {
         const el = document.getElementById('sport-news-list');
         if (!el) return;
         if (!news.length) {
-            el.innerHTML = '<div style="color:var(--fg-4);font-size:13px">Sem conexão ou sem notícias.</div>';
+            el.innerHTML = `<div style="color:var(--fg-4);font-size:13px;padding:8px 0">Sem notícias agora.
+                <button onclick="orbit.reloadNews()" style="margin-left:8px;background:var(--bg-4);border:1px solid var(--line-2);color:var(--fg-2);padding:4px 10px;border-radius:8px;font-size:12px;cursor:pointer">Tentar de novo</button></div>`;
             return;
         }
         el.innerHTML = news.map(n => {

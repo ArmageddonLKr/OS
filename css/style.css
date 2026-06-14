@@ -1840,3 +1840,63 @@ select option { background: var(--raised); }
 .code-wrap pre code { font-family:var(--font-mono); font-size:12.5px; line-height:1.6; background:none; padding:0; }
 .hljs { background:transparent !important; }
 code.ic { font-family:var(--font-mono); font-size:12px; background:var(--bg-4); border:1px solid var(--line-2); border-radius:var(--r-xs); padding:1px 5px; color:var(--steel); }
+
+/* ════════════════════════════════════════════════════════════════
+   POLISH LAYER (v26) — micro-interações + acabamento
+   Monocromático, aditivo, só transform/opacity (60fps).
+   ════════════════════════════════════════════════════════════════ */
+
+/* Troca de aba com fade-up suave */
+.tab-screen.active { animation: tabIn .30s var(--ease-out); }
+@keyframes tabIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* Feedback de toque coeso em cards e botões */
+.sport-team-card, .fighter-card, .sport-result-item, .conv-item,
+.dash-chat-btn, .hdr-btn, .nav-btn, .mod-stab, .stc-btn-sm, .stc-add-btn, .ps5-card {
+  transition: transform .16s var(--ease-out), border-color .2s var(--ease-out),
+              box-shadow .2s var(--ease-out), background .2s var(--ease-out);
+}
+.sport-team-card:active, .fighter-card:active, .sport-result-item:active,
+.conv-item:active, .dash-chat-btn:active, .ps5-card:active { transform: scale(.985); }
+.hdr-btn:active, .nav-btn:active, .stc-add-btn:active, .stc-btn-sm:active { transform: scale(.9); }
+
+/* Cards de esporte com profundidade e borda viva */
+.sport-team-card, .fighter-card {
+  background: linear-gradient(180deg, var(--bg-2), var(--bg-3));
+  box-shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 8px 22px -14px rgba(0,0,0,.85);
+}
+.sport-team-card:hover, .fighter-card:hover, .sport-result-item:hover { border-color: var(--gold-line); }
+
+/* Barrinha-acento antes do título de seção */
+.sport-sec-title { display: flex; align-items: center; gap: 8px; }
+.sport-sec-title::before {
+  content: ""; width: 14px; height: 2px; border-radius: 2px; flex-shrink: 0;
+  background: linear-gradient(90deg, var(--fg-1), transparent);
+}
+
+/* Aba ativa com glow sutil */
+.mod-stab.active { box-shadow: 0 4px 14px -6px rgba(255,255,255,.3); }
+
+/* Nav ativa brilhando */
+.nav-btn.active .nav-icon { filter: drop-shadow(0 0 7px rgba(255,255,255,.45)); }
+
+/* Botão enviar com glow */
+.send-btn { box-shadow: 0 4px 18px -6px rgba(255,255,255,.5); }
+
+/* News item desliza um tico ao tocar */
+.news-item { transition: background .2s var(--ease-out), padding-left .2s var(--ease-out); }
+.news-item:active { padding-left: 18px; }
+
+/* Entrada escalonada (fade-rise) em listas de esporte/notícia */
+.sport-team-card, .fighter-card, .news-item, .sport-result-item {
+  animation: riseIn .42s var(--ease-out) both;
+}
+@keyframes riseIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+/* CTA principal (falar com a Orbit) com leve brilho de borda */
+.dash-chat-btn { box-shadow: 0 8px 26px -16px rgba(255,255,255,.5); }
+
+/* Respeita quem prefere menos movimento */
+@media (prefers-reduced-motion: reduce) {
+  .tab-screen.active, .sport-team-card, .fighter-card, .news-item, .sport-result-item { animation: none; }
+}
