@@ -29,15 +29,36 @@ function scSet(key, data) {
     try { sessionStorage.setItem(key, JSON.stringify({ ts: Date.now(), data })); } catch {}
 }
 
+/* Proxies CORS — alguns hosts (ESPN) podem bloquear fetch direto no celular */
+const CORS_WRAPS = [
+    u => u,
+    u => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+    u => `https://thingproxy.freeboard.io/fetch/${u}`
+];
+
+/* GET JSON resiliente: tenta direto e cai em proxies se falhar/vier vazio */
+async function fetchJSON(url, timeout = 8000) {
+    for (const wrap of CORS_WRAPS) {
+        try {
+            const r = await fetch(wrap(url), { signal: AbortSignal.timeout(timeout) });
+            if (!r.ok) continue;
+            const txt = await r.text();
+            if (!txt) continue;
+            try { return JSON.parse(txt); } catch { continue; }
+        } catch { /* tenta próximo proxy */ }
+    }
+    return null;
+}
+
 export class Entertainment {
     /* ── F1 ─────────────────────────────────────────── */
     static async getF1NextRace() {
         const hit = scGet('ent_f1_next');
         if (hit) return hit;
         try {
-            const r = await fetch(`${F1_BASE}/current/next.json`, { signal: AbortSignal.timeout(6000) });
-            if (!r.ok) return null;
-            const d = await r.json();
+            const d = await fetchJSON(`${F1_BASE}/current/next.json`, 7000);
+            if (!d) return null;
             const race = d?.MRData?.RaceTable?.Races?.[0];
             if (!race) return null;
             const result = {
@@ -58,9 +79,8 @@ export class Entertainment {
         const hit = scGet('ent_f1_stand');
         if (hit) return hit;
         try {
-            const r = await fetch(`${F1_BASE}/current/driverStandings.json`, { signal: AbortSignal.timeout(6000) });
-            if (!r.ok) return [];
-            const d = await r.json();
+            const d = await fetchJSON(`${F1_BASE}/current/driverStandings.json`, 7000);
+            if (!d) return [];
             const list = (d?.MRData?.StandingsTable?.StandingsLists?.[0]?.DriverStandings || [])
                 .slice(0, 5)
                 .map(s => ({
@@ -84,14 +104,10 @@ export class Entertainment {
     static async searchESPNTeam(query, league) {
         const cacheKey = `ent_espn_${league}`;
         let list = scGet(cacheKey);
-        if (!list) {
-            try {
-                const r = await fetch(`${ESPN_BASE}/${league}/teams?limit=200`, { signal: AbortSignal.timeout(8000) });
-                if (!r.ok) return [];
-                const d = await r.json();
-                list = d?.sports?.[0]?.leagues?.[0]?.teams || [];
-                scSet(cacheKey, list);
-            } catch { return []; }
+        if (!list || !list.length) {
+            const d = await fetchJSON(`${ESPN_BASE}/${league}/teams?limit=500`, 9000);
+            list = d?.sports?.[0]?.leagues?.[0]?.teams || [];
+            if (list.length) scSet(cacheKey, list);
         }
         const q = _norm(query).trim();
         if (!q) return [];
@@ -121,9 +137,8 @@ export class Entertainment {
         const hit = scGet(key);
         if (hit) return hit;
         try {
-            const r = await fetch(`${ESPN_BASE}/${espnLeague}/teams/${espnId}/schedule`, { signal: AbortSignal.timeout(8000) });
-            if (!r.ok) return null;
-            const d = await r.json();
+            const d = await fetchJSON(`${ESPN_BASE}/${espnLeague}/teams/${espnId}/schedule`, 9000);
+            if (!d) return null;
             const now = Date.now();
             const upcoming = (d?.events || []).find(e => {
                 const status = e.competitions?.[0]?.status?.type?.name || '';
@@ -277,8 +292,10 @@ export class Entertainment {
 
         // 2) allorigins → XML cru, parse manual com DOMParser
         const proxies = [
+            u => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
             u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-            u => `https://corsproxy.io/?url=${encodeURIComponent(u)}`
+            u => `https://thingproxy.freeboard.io/fetch/${u}`,
+            u => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(u)}`
         ];
         for (const wrap of proxies) {
             try {
@@ -435,14 +452,11 @@ export class Entertainment {
 
         const byId = new Map();
         for (const u of urls) {
-            try {
-                const r = await fetch(u, { signal: AbortSignal.timeout(8000) });
-                if (!r.ok) continue;
-                const d = await r.json();
-                for (const ev of this._parseCombatEvents(d)) {
-                    if (ev.id && !byId.has(ev.id)) byId.set(ev.id, ev);
-                }
-            } catch { /* tenta próxima janela */ }
+            const d = await fetchJSON(u, 8000);
+            if (!d) continue;
+            for (const ev of this._parseCombatEvents(d)) {
+                if (ev.id && !byId.has(ev.id)) byId.set(ev.id, ev);
+            }
         }
 
         const events = [...byId.values()];
