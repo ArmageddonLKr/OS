@@ -89,8 +89,10 @@ class App {
     _migrateConfig() {
         try {
             const raw = Store.get(K.cfg, {});
-            if (raw && typeof raw.prompt === 'string' &&
-                (raw.prompt.includes('Chama SEMPRE') || raw.prompt.includes('JAMAIS "você"') || raw.prompt.includes('Filha digital do JR'))) {
+            // Assinaturas dos prompts-padrão antigos (formal + v1 da psique). Se bater, sobe pra versão atual.
+            // Não toca se o usuário escreveu o próprio prompt.
+            const oldSigs = ['Chama SEMPRE', 'JAMAIS "você"', 'Filha digital do JR', '(psique de verdade)', 'parceira de quebrada do JR', 'Esperta pra caramba'];
+            if (raw && typeof raw.prompt === 'string' && oldSigs.some(s => raw.prompt.includes(s))) {
                 raw.prompt = DEFAULT_PROMPT;
                 Store.saveCfg(raw);
             }
