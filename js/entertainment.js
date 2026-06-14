@@ -237,51 +237,135 @@ export class Entertainment {
         return `https://www.transfermarkt.com/schnellsuche/ergebnis/schnellsuche?query=${encodeURIComponent(teamName || '')}`;
     }
 
-    /* ── Notícias Tech (PT-BR via Google News) ──────── */
-    static async getTechNews() {
-        const hit = scGet('ent_news_ptbr', TTL_NEWS);
-        if (hit) return hit;
+    /* ── NOTÍCIAS (PT-BR, multi-fonte + multi-proxy) ──── */
+    static _newsFeeds(topic) {
+        const T = {
+            top:    'https://news.google.com/rss?hl=pt-BR&gl=BR&ceid=BR:pt-BR',
+            tech:   'https://news.google.com/rss/headlines/section/topic/TECHNOLOGY?hl=pt-BR&gl=BR&ceid=BR:pt-BR',
+            world:  'https://news.google.com/rss/headlines/section/topic/WORLD?hl=pt-BR&gl=BR&ceid=BR:pt-BR',
+            sports: 'https://news.google.com/rss/headlines/section/topic/SPORTS?hl=pt-BR&gl=BR&ceid=BR:pt-BR',
+            business:'https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=pt-BR&gl=BR&ceid=BR:pt-BR',
+            ai:     'https://news.google.com/rss/search?q=intelig%C3%AAncia+artificial+OR+IA+OR+tecnologia+OR+programa%C3%A7%C3%A3o&hl=pt-BR&gl=BR&ceid=BR:pt-BR'
+        };
+        return T[topic] || T.top;
+    }
 
-        const feeds = [
-            'https://news.google.com/rss/search?q=tecnologia+OR+intelig%C3%AAncia+artificial+OR+programa%C3%A7%C3%A3o&hl=pt-BR&gl=BR&ceid=BR:pt-BR',
-            'https://news.google.com/rss/headlines/section/topic/TECHNOLOGY?hl=pt-BR&gl=BR&ceid=BR:pt-BR'
-        ];
-
-        for (const feed of feeds) {
-            try {
-                const url = `${RSS2JSON}?rss_url=${encodeURIComponent(feed)}&count=10`;
-                const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
-                if (!r.ok) continue;
+    /* Busca um feed RSS tentando vários proxies (resiliência) */
+    static async _fetchRSS(feedUrl, count = 10) {
+        // 1) rss2json (JSON direto)
+        try {
+            const url = `${RSS2JSON}?rss_url=${encodeURIComponent(feedUrl)}&count=${count}`;
+            const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+            if (r.ok) {
                 const d = await r.json();
-                const items = d?.items || [];
-                if (!items.length) continue;
+                if (d?.status === 'ok' && d.items?.length) {
+                    return d.items.map(it => ({
+                        title: it.title || '',
+                        link: it.link || '#',
+                        author: it.author || '',
+                        pubDate: it.pubDate || ''
+                    }));
+                }
+            }
+        } catch { /* próximo */ }
 
-                const result = items.slice(0, 8).map(it => {
-                    const link = this._cleanGoogleNewsLink(it.link);
-                    const source = this._extractSource(it);
-                    return {
-                        title: (it.title || '').replace(/ - [^-]+$/, '').trim(),
-                        url: link,
-                        source,
-                        time: it.pubDate ? new Date(it.pubDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : ''
-                    };
-                }).filter(n => n.title);
-
-                scSet('ent_news_ptbr', result);
-                return result;
-            } catch { /* try next feed */ }
+        // 2) allorigins → XML cru, parse manual com DOMParser
+        const proxies = [
+            u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+            u => `https://corsproxy.io/?url=${encodeURIComponent(u)}`
+        ];
+        for (const wrap of proxies) {
+            try {
+                const r = await fetch(wrap(feedUrl), { signal: AbortSignal.timeout(9000) });
+                if (!r.ok) continue;
+                const xml = await r.text();
+                const items = this._parseRSSXml(xml).slice(0, count);
+                if (items.length) return items;
+            } catch { /* próximo proxy */ }
         }
         return [];
     }
 
-    static _cleanGoogleNewsLink(link) {
-        if (!link) return '#';
-        // Google News RSS retorna URL de redirect — usamos direto, abre certinho no navegador.
-        return link;
+    static _parseRSSXml(xml) {
+        try {
+            const doc = new DOMParser().parseFromString(xml, 'text/xml');
+            const nodes = [...doc.querySelectorAll('item'), ...doc.querySelectorAll('entry')];
+            return nodes.map(n => {
+                const get = tag => n.querySelector(tag)?.textContent?.trim() || '';
+                let link = get('link');
+                if (!link) link = n.querySelector('link')?.getAttribute('href') || '#';
+                return {
+                    title: get('title'),
+                    link,
+                    author: get('source') || get('author') || '',
+                    pubDate: get('pubDate') || get('published') || get('updated') || ''
+                };
+            }).filter(i => i.title);
+        } catch { return []; }
+    }
+
+    /* Notícias gerais (top BR) — o que tá rolando de verdade */
+    static async getNews(topic = 'top') {
+        const ck = `ent_news_${topic}`;
+        const hit = scGet(ck, TTL_NEWS);
+        if (hit) return hit;
+
+        const items = await this._fetchRSS(this._newsFeeds(topic), 12);
+        if (!items.length) return [];
+
+        const result = items.slice(0, 9).map(it => ({
+            title: (it.title || '').replace(/ - [^-]+$/, '').trim(),
+            url: it.link || '#',
+            source: this._extractSource(it),
+            time: it.pubDate ? this._relTime(it.pubDate) : ''
+        })).filter(n => n.title);
+
+        scSet(ck, result);
+        return result;
+    }
+
+    /* Mantido por compatibilidade — agora mistura top + tech */
+    static async getTechNews() {
+        const ck = 'ent_news_mix';
+        const hit = scGet(ck, TTL_NEWS);
+        if (hit) return hit;
+
+        const [top, tech] = await Promise.all([
+            this.getNews('top').catch(() => []),
+            this.getNews('tech').catch(() => [])
+        ]);
+
+        // Intercala top e tech, remove duplicados por título
+        const seen = new Set();
+        const mix = [];
+        const maxLen = Math.max(top.length, tech.length);
+        for (let i = 0; i < maxLen; i++) {
+            for (const n of [top[i], tech[i]]) {
+                if (!n) continue;
+                const key = n.title.toLowerCase().slice(0, 40);
+                if (seen.has(key)) continue;
+                seen.add(key);
+                mix.push(n);
+            }
+        }
+        const result = mix.slice(0, 9);
+        if (result.length) scSet(ck, result);
+        return result;
+    }
+
+    static _relTime(pubDate) {
+        try {
+            const dt = new Date(pubDate);
+            const mins = Math.round((Date.now() - dt) / 60000);
+            if (mins < 1) return 'agora';
+            if (mins < 60) return `${mins}min`;
+            const hrs = Math.round(mins / 60);
+            if (hrs < 24) return `${hrs}h`;
+            return dt.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+        } catch { return ''; }
     }
 
     static _extractSource(item) {
-        // rss2json devolve source dentro de `author` ou no final do título "Notícia X - Fonte"
         if (item.author) return item.author;
         const m = (item.title || '').match(/ - ([^-]+)$/);
         return m ? m[1].trim() : '';
@@ -303,34 +387,61 @@ export class Entertainment {
         this.saveFighters(this.getFighters().filter(f => f.id !== id));
     }
 
+    static _ymd(d) {
+        return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+    static _parseCombatEvents(d) {
+        return (d?.events || []).map(e => {
+            const comp = e.competitions?.[0] || {};
+            const competitors = comp.competitors || [];
+            const fighters = competitors
+                .map(c => c.athlete?.displayName || c.athlete?.name || c.displayName || '')
+                .filter(Boolean);
+            return {
+                id: e.id,
+                name: e.name || e.shortName || '',
+                date: e.date,
+                status: comp.status?.type?.shortDetail || '',
+                live: comp.status?.type?.name === 'STATUS_IN_PROGRESS',
+                completed: comp.status?.type?.completed === true,
+                fighters,
+                venue: comp.venue?.fullName || ''
+            };
+        });
+    }
+
     /* sport: 'boxing' | 'ufc' | 'pfl' | 'bellator' */
     static async getCombatSchedule(sport) {
         const key = `ent_combat_${sport}`;
         const hit = scGet(key);
         if (hit) return hit;
         const base = sport === 'boxing' ? ESPN_BOXING : `${ESPN_MMA}/${sport}`;
-        try {
-            const r = await fetch(`${base}/scoreboard`, { signal: AbortSignal.timeout(8000) });
-            if (!r.ok) return [];
-            const d = await r.json();
-            const events = (d?.events || []).map(e => {
-                const comp = e.competitions?.[0] || {};
-                const competitors = comp.competitors || [];
-                const fighters = competitors.map(c => c.athlete?.displayName || c.athlete?.name || c.displayName || '?').filter(Boolean);
-                return {
-                    id: e.id,
-                    name: e.name || e.shortName || '',
-                    date: e.date,
-                    status: comp.status?.type?.shortDetail || '',
-                    live: comp.status?.type?.name === 'STATUS_IN_PROGRESS',
-                    completed: comp.status?.type?.completed === true,
-                    fighters,
-                    venue: comp.venue?.fullName || ''
-                };
-            });
-            scSet(key, events);
-            return events;
-        } catch { return []; }
+
+        // Janela atual + próximos ~3 meses (scoreboard só traz a semana corrente)
+        const now = new Date();
+        const in90 = new Date(now.getTime() + 90 * 86400000);
+        const urls = [
+            `${base}/scoreboard`,
+            `${base}/scoreboard?dates=${this._ymd(now)}-${this._ymd(in90)}`,
+            `${base}/scoreboard?dates=${now.getFullYear()}`
+        ];
+
+        const byId = new Map();
+        for (const u of urls) {
+            try {
+                const r = await fetch(u, { signal: AbortSignal.timeout(8000) });
+                if (!r.ok) continue;
+                const d = await r.json();
+                for (const ev of this._parseCombatEvents(d)) {
+                    if (ev.id && !byId.has(ev.id)) byId.set(ev.id, ev);
+                }
+            } catch { /* tenta próxima janela */ }
+        }
+
+        const events = [...byId.values()];
+        if (events.length) scSet(key, events);
+        return events;
     }
 
     static async getFighterNextEvent(fighter) {

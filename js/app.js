@@ -3,7 +3,7 @@
  * Sessions 1-10 integradas
  */
 
-import { Store, K } from './store.js';
+import { Store, K, DEFAULT_PROMPT } from './store.js';
 import { AI } from './ai.js';
 import { UI, Icons } from './ui.js';
 import { Calculator, Converter, Pomodoro, DataTools } from './tools.js';
@@ -85,7 +85,20 @@ class App {
         }
     }
 
+    /* Migra o prompt antigo (formal) pra nova psique, se o usuário não customizou */
+    _migrateConfig() {
+        try {
+            const raw = Store.get(K.cfg, {});
+            if (raw && typeof raw.prompt === 'string' &&
+                (raw.prompt.includes('Chama SEMPRE') || raw.prompt.includes('JAMAIS "você"') || raw.prompt.includes('Filha digital do JR'))) {
+                raw.prompt = DEFAULT_PROMPT;
+                Store.saveCfg(raw);
+            }
+        } catch (_) {}
+    }
+
     boot() {
+        this._migrateConfig();
         this.initOrb();
         this.setupListeners();
         this.setupVoice();
@@ -270,16 +283,16 @@ class App {
         const day = now.getDate();
         const month = now.getMonth();
 
-        const _nm = Store.getCfg().userName || 'Pai';
-        let greet = hr < 5 ? `Boa madrugada, ${_nm}` : hr < 12 ? `Bom dia, ${_nm}` : hr < 18 ? `Boa tarde, ${_nm}` : `Boa noite, ${_nm}`;
+        const _nm = Store.getCfg().userName || 'JR';
+        let greet = hr < 5 ? `Boa madruga, ${_nm}` : hr < 12 ? `Bom dia, ${_nm}` : hr < 18 ? `Boa tarde, ${_nm}` : `Boa noite, ${_nm}`;
         if (month === 1 && day === 4) greet = `🎂 Aniversário da Orbit, ${_nm}!`;
         else if (month === 11 && day === 25) greet = `🎄 Feliz Natal, ${_nm}`;
         else if (month === 11 && day === 11) greet = `⚙️ Feliz dia do Engenheiro, ${_nm}`;
 
         const subMap = {
-            0: dow === 0 && hr >= 19 ? 'Domingo à noite — hora de alinhar a semana.' : 'Que o Senhor descanse bem.',
-            1: 'Segunda-feira — semana nova, propósito novo.',
-            5: 'Sexta-feira — boa hora para revisar a semana.',
+            0: dow === 0 && hr >= 19 ? 'Domingo à noite — bora alinhar a semana.' : 'Descansa que tu merece.',
+            1: 'Segunda — semana nova, nova chance de fazer acontecer.',
+            5: 'Sextou — bom momento pra fechar a semana.',
         };
 
         const dateStr = now.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' });
@@ -293,7 +306,7 @@ class App {
                 hint.textContent = '⚠️ Configure a chave de IA em Config → IA';
                 hint.style.color = 'var(--gold)';
             } else {
-                const hints = ['Falar com a Orbit...', 'O que o Senhor precisa hoje?', 'Aqui estou, Pai.', 'Pronta para agir.'];
+                const hints = ['Fala comigo...', 'E aí, no que cê tá?', 'Tô aqui, manda ver.', 'Bora resolver?', 'Desembucha 👀'];
                 hint.textContent = hints[Math.floor(Math.random() * hints.length)];
                 hint.style.color = '';
             }
@@ -2216,13 +2229,13 @@ class App {
     async _askDailyQuestion() {
         if (this.busy) return;
         const questions = [
-            'Como está o coração do Pai hoje?',
-            'Qual é a maior prioridade de hoje para o Senhor?',
-            'Tem algo pesando que o Senhor queira falar?',
-            'O que está te animando ultimamente?',
-            'O Senhor dormiu bem? Como está a energia hoje?',
-            'Qual o maior desafio dessa semana até agora?',
-            'Em que posso ajudar o Senhor hoje, Pai?'
+            'E aí, como cê tá hoje de verdade?',
+            'Qual a prioridade nº1 de hoje? Bora focar nela.',
+            'Tem algo te pesando? Pode soltar aqui.',
+            'O que tá te animando ultimamente?',
+            'Dormiu bem? Como tá a energia hoje?',
+            'Qual o maior perrengue da semana até agora?',
+            'No que eu posso te ajudar agora?'
         ];
         const q = questions[Math.floor(Math.random() * questions.length)];
         UI.addMsg('sophy', q, false);
@@ -2327,6 +2340,25 @@ class App {
                             }
                             UI.toast('URL lida!', 'ok');
                         }
+                    }
+                } catch (_) {}
+                UI.setStatus('respondendo...');
+            } else if (AI.needsWeb(text)) {
+                // Sem URL colada, mas a pergunta pede dado fresco → busca na web
+                try {
+                    UI.setStatus('buscando na web...');
+                    const found = await AI.webSearch(text, this.abortCtrl.signal);
+                    if (found) {
+                        aiMessages = [...aiMessages];
+                        const last = aiMessages[aiMessages.length - 1];
+                        if (last?.role === 'user') {
+                            const today = AI.nowBR().toLocaleDateString('pt-BR', { dateStyle: 'full' });
+                            aiMessages[aiMessages.length - 1] = {
+                                ...last,
+                                content: last.content + `\n\n[BUSCA WEB — ${today}. Use isto como fonte real e cite o que importar, mas responda do SEU jeito:\n${found}\nFIM DA BUSCA]`
+                            };
+                        }
+                        UI.toast('Internet consultada 🌐', 'ok');
                     }
                 } catch (_) {}
                 UI.setStatus('respondendo...');

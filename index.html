@@ -7,6 +7,8 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="OS">
+    <link rel="apple-touch-icon" href="./icon-192.png">
+    <link rel="icon" type="image/svg+xml" href="./icon.svg">
     <link rel="manifest" href="./manifest.json">
     <title>OS</title>
 
@@ -28,12 +30,15 @@
 <!-- ── PIN SCREEN ──────────────────────────────────────────────── -->
 <section id="pinscreen" class="screen">
     <div class="pin-hero">
-        <div class="av av-88">
-            <div class="av-core"></div>
-            <div class="av-r"></div>
-            <div class="av-r av-r2"></div>
-            <div class="av-r av-r3"></div>
-        </div>
+        <svg class="brand-anchor" viewBox="0 0 512 512" width="92" height="92" aria-label="OS">
+            <g fill="#fff" stroke="#fff" stroke-width="2" stroke-linejoin="round">
+                <circle cx="256" cy="92" r="33" fill="none" stroke-width="22"/>
+                <path d="M242 122 L270 122 L266 392 L246 392 Z"/>
+                <path d="M120 196 L168 176 Q256 152 344 176 L392 196 L344 206 Q256 184 168 206 Z"/>
+                <path d="M92 246 C 96 358 168 452 256 452 C 344 452 416 358 420 246 C 404 316 366 350 324 364 C 302 372 280 376 256 376 C 232 376 210 372 188 364 C 146 350 108 316 92 246 Z"/>
+                <path d="M236 440 L256 488 L276 440 Z"/>
+            </g>
+        </svg>
         <h1 class="pin-title">OS</h1>
         <p class="pin-sub">IDENTIDADE REQUERIDA</p>
     </div>
@@ -479,8 +484,8 @@
             </div>
             <div id="sport-teams-list"></div>
 
-            <!-- Notícias Tech -->
-            <div class="sport-sec-title" style="margin-top:20px">📰 NOTÍCIAS TECH</div>
+            <!-- Notícias -->
+            <div class="sport-sec-title" style="margin-top:20px">📰 NOTÍCIAS DE HOJE</div>
             <div id="sport-news-list"></div>
 
             <!-- F1 -->

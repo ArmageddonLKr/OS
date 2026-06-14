@@ -272,6 +272,16 @@ body {
 
 .pin-hero { text-align: center; margin-bottom: 40px; }
 
+.brand-anchor {
+  display: inline-block;
+  filter: drop-shadow(0 0 14px rgba(255,255,255,0.35));
+  animation: anchor-breathe 4.5s ease-in-out infinite;
+}
+@keyframes anchor-breathe {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 12px rgba(255,255,255,0.25)); }
+  50%      { transform: scale(1.04); filter: drop-shadow(0 0 22px rgba(255,255,255,0.45)); }
+}
+
 .pin-title {
   font-family: var(--fd);
   font-size: 20px;
