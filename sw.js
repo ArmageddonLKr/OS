@@ -1,4 +1,4 @@
-const CACHE = 'orbit-v22';
+const CACHE = 'orbit-v23';
 const SHELL = [
   './',
   './index.html',
@@ -17,6 +17,7 @@ const SHELL = [
   './js/entertainment.js',
   './js/agenda.js',
   './manifest.json',
+  './icon.svg',
   './icon-192.png',
   './icon-512.png',
   './fonts/SpaceGrotesk-Variable.woff2',

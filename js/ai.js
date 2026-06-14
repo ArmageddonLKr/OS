@@ -341,6 +341,61 @@ export class AI {
         return { provider: 'gemini' };
     }
 
+    /* ── INTERNET: decide se a pergunta precisa de dado fresco ── */
+    static needsWeb(text = '') {
+        const t = text.toLowerCase();
+        if (text.length > 600) return false; // texto longo colado ≠ pergunta de busca
+        // Gatilhos explícitos de busca
+        if (/\b(pesquis|procur(a|e)|busca na|na internet|na web|search|d(á|a) um google|me acha)\w*/.test(t)) return true;
+        // Notícias / atualidade
+        if (/\b(notícia|noticia|manchete|acontecendo no mundo|últimas|ultimas|aconteceu (hoje|ontem|agora)|tá rolando|ta rolando|que rolou)\w*/.test(t)) return true;
+        // Fatos voláteis (preço, cotação, cripto)
+        if (/\b(cotaç|cotac|dólar|dolar|euro|bitcoin|cripto|preço de|preco de|quanto custa|quanto tá|quanto ta|valor d(o|a) )\w*/.test(t)) return true;
+        // Resultados / lançamentos / horários de eventos
+        if (/\b(placar|quem ganhou|quem venceu|resultado d|que horas (é|e|começa|comeca)|quando (é|e|sai|vai sair|lança|lanca|estreia)|lançamento|lancamento)\w*/.test(t)) return true;
+        // "quem é / o que é" sobre algo recente
+        if (/\b(quem (é|e|foi)|o que (é|e|foi|houve|aconteceu))\b/.test(t) && /\b(202[4-9]|hoje|recent|agora|atual)\w*/.test(t)) return true;
+        return false;
+    }
+
+    /* ── INTERNET: busca web (Jina → DuckDuckGo fallback) ── */
+    static async webSearch(query, signal) {
+        const q = (query || '').trim();
+        if (!q) return '';
+
+        // 1) Jina Reader Search — top resultados com snippet, sem chave
+        try {
+            const r = await fetch(`https://s.jina.ai/${encodeURIComponent(q)}`, {
+                signal,
+                headers: { 'Accept': 'text/plain', 'X-Respond-With': 'no-content' }
+            });
+            if (r.ok) {
+                const txt = (await r.text()).trim();
+                if (txt && txt.length > 40) return txt.slice(0, 3500);
+            }
+        } catch (_) { /* tenta fallback */ }
+
+        // 2) DuckDuckGo Instant Answer (CORS-friendly)
+        try {
+            const r = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(q)}&format=json&no_html=1&skip_disambig=1`, { signal });
+            if (r.ok) {
+                const d = await r.json();
+                let out = '';
+                if (d.AbstractText) out += d.AbstractText + (d.AbstractURL ? ` (${d.AbstractURL})` : '') + '\n';
+                if (d.Answer) out += d.Answer + '\n';
+                const topics = (d.RelatedTopics || [])
+                    .filter(x => x.Text)
+                    .slice(0, 5)
+                    .map(x => `- ${x.Text}`)
+                    .join('\n');
+                if (topics) out += topics;
+                if (out.trim()) return out.trim().slice(0, 3000);
+            }
+        } catch (_) { /* sem rede */ }
+
+        return '';
+    }
+
     static async summarizeSession(msgs) {
         if (msgs.length < 10) return;
         const historyText = msgs
