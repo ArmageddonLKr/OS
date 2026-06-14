@@ -16,6 +16,17 @@ export class AI {
         return new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Fortaleza' }));
     }
 
+    /* Data de Teresina no formato YYYY-MM-DD (vira no fuso local, não UTC) */
+    static todayStr(d) {
+        try {
+            return new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'America/Fortaleza', year: 'numeric', month: '2-digit', day: '2-digit'
+            }).format(d || new Date());
+        } catch (_) {
+            return (d || new Date()).toISOString().slice(0, 10);
+        }
+    }
+
     static dateStrBR(d) {
         const dt = d ? new Date(d) : this.nowBR();
         return dt.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
@@ -147,8 +158,19 @@ export class AI {
         return `${sys}\n\nCONTEXTO:\nAGORA: ${dtBR}\nTOM: ${tone}${sundayNote}${this.absenceNote()}${this._stressHint}\n\n${Store.getNuc()}${epBlock}${this.agendaContext()}${contextExtra}`;
     }
 
+    /* Teto de saída adaptativo — pergunta curta gasta menos; pedido de código/explicação gasta mais */
+    static _autoMaxTokens(msgs = []) {
+        const last = [...msgs].reverse().find(m => m.role === 'user')?.content || '';
+        const t = last.toLowerCase();
+        if (/\b(código|codigo|code|script|função|funcao|implementa|exemplo completo|explica|detalha|passo a passo|liste|lista de|escreva|redija|gera(r)? um)\b/.test(t) || last.length > 400) {
+            return 2048;
+        }
+        if (last.length < 60) return 700;
+        return 1280;
+    }
+
     static getWindowedMsgs(msgs) {
-        const w = Store.getCfg().msgWindow || 20;
+        const w = Store.getCfg().msgWindow || 24;
         if (msgs.length <= w) return msgs;
 
         const older = msgs.slice(0, -w);
@@ -157,12 +179,12 @@ export class AI {
         const summary = older
             .map(m => {
                 const who = m.role === 'user' ? 'JR' : 'Orbit';
-                const txt = (m.content || '').replace(/\[BOOT[^\]]*\]/g, '').trim().slice(0, 80);
+                const txt = (m.content || '').replace(/\[BOOT[^\]]*\]/g, '').trim().slice(0, 110);
                 return txt ? `${who}: ${txt}` : null;
             })
             .filter(Boolean)
             .join(' | ')
-            .slice(0, 500);
+            .slice(0, 800);
 
         return [
             { role: 'user', content: `[CONTEXTO ANTERIOR: ${summary}]` },
@@ -197,8 +219,8 @@ export class AI {
                 model: c.groqModel || GROQ_MODEL,
                 messages,
                 stream: true,
-                temperature: 0.9,
-                max_tokens: payload.max_tokens || 2048
+                temperature: 0.85,
+                max_tokens: payload.max_tokens || this._autoMaxTokens(payload.messages)
             })
         });
 
@@ -274,8 +296,8 @@ export class AI {
                 contents: merged,
                 system_instruction: { parts: [{ text: sysText }] },
                 generationConfig: {
-                    temperature: 0.9,
-                    maxOutputTokens: payload.max_tokens || 2048,
+                    temperature: 0.85,
+                    maxOutputTokens: payload.max_tokens || this._autoMaxTokens(payload.messages),
                     topP: 0.95
                 }
             })
@@ -346,7 +368,7 @@ export class AI {
         const t = text.toLowerCase();
         if (text.length > 600) return false; // texto longo colado ≠ pergunta de busca
         // Gatilhos explícitos de busca
-        if (/\b(pesquis|procur(a|e)|busca na|na internet|na web|search|d(á|a) um google|me acha)\w*/.test(t)) return true;
+        if (/\b(pesquis|procur(a|e)|busca na|na internet|na web|search|d(á|a) um google|me acha|olha na net)\w*/.test(t)) return true;
         // Notícias / atualidade
         if (/\b(notícia|noticia|manchete|acontecendo no mundo|últimas|ultimas|aconteceu (hoje|ontem|agora)|tá rolando|ta rolando|que rolou)\w*/.test(t)) return true;
         // Fatos voláteis (preço, cotação, cripto)
@@ -355,7 +377,25 @@ export class AI {
         if (/\b(placar|quem ganhou|quem venceu|resultado d|que horas (é|e|começa|comeca)|quando (é|e|sai|vai sair|lança|lanca|estreia)|lançamento|lancamento)\w*/.test(t)) return true;
         // "quem é / o que é" sobre algo recente
         if (/\b(quem (é|e|foi)|o que (é|e|foi|houve|aconteceu))\b/.test(t) && /\b(202[4-9]|hoje|recent|agora|atual)\w*/.test(t)) return true;
+        // Pergunta factual sobre o mundo (gate: pergunta + sem referência pessoal/app)
+        const isQuestion = text.includes('?') || /^\s*(qual|quais|quando|onde|quanto|quantos|quem|o que|por que|porque|como)\b/.test(t);
+        const isPersonal = /\b(você|voce|vc|tu |teu|tua|contigo|comigo|a gente|orbit|sophy|lembra|meu |minha |minhas |meus |me ajuda|me da|me dá|tô |to |tava|cê|acha que|sua opinião|sua opiniao)\b/.test(t);
+        if (isQuestion && !isPersonal && t.length > 14
+            && /\b(quem|onde|quando|quanto|qual|quais|o que|por que|porque|significa|funciona|fica|serve|aconteceu|inventou|criou|descobriu|capital|população|populacao|altura|idade|distância|distancia|tradu)\w*/.test(t)) {
+            return true;
+        }
         return false;
+    }
+
+    /* Comprime resultado de busca p/ gastar menos token (tira ruído/espaços/links longos) */
+    static _trimSearch(txt, max = 1800) {
+        return (txt || '')
+            .replace(/\[[^\]]*\]\((https?:\/\/[^)]+)\)/g, '$1') // markdown link → url
+            .replace(/!\[[^\]]*\]\([^)]*\)/g, '')               // imagens fora
+            .replace(/[ \t]{2,}/g, ' ')
+            .replace(/\n{3,}/g, '\n\n')
+            .trim()
+            .slice(0, max);
     }
 
     /* ── INTERNET: busca web (Jina → DuckDuckGo fallback) ── */
@@ -371,7 +411,7 @@ export class AI {
             });
             if (r.ok) {
                 const txt = (await r.text()).trim();
-                if (txt && txt.length > 40) return txt.slice(0, 3500);
+                if (txt && txt.length > 40) return this._trimSearch(txt);
             }
         } catch (_) { /* tenta fallback */ }
 
@@ -389,7 +429,7 @@ export class AI {
                     .map(x => `- ${x.Text}`)
                     .join('\n');
                 if (topics) out += topics;
-                if (out.trim()) return out.trim().slice(0, 3000);
+                if (out.trim()) return this._trimSearch(out, 1600);
             }
         } catch (_) { /* sem rede */ }
 

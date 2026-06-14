@@ -160,7 +160,7 @@
 .hub-kanban-section { overflow: hidden; }
 .kanban-board { display: flex; gap: 10px; padding: 14px; overflow-x: auto; -webkit-overflow-scrolling: touch; height: 100%; align-items: flex-start; }
 .kanban-board::-webkit-scrollbar { height: 2px; }
-.kanban-col { flex-shrink: 0; width: 200px; background: var(--bg-2); border: 1px solid var(--line-1); border-radius: var(--r-md); overflow: hidden; }
+.kanban-col { flex-shrink: 0; width: clamp(150px, 78vw, 200px); background: var(--bg-2); border: 1px solid var(--line-1); border-radius: var(--r-md); overflow: hidden; }
 .kanban-col-hdr { padding: 10px 12px 8px; border-bottom: 1px solid var(--line-1); display: flex; align-items: center; gap: 6px; }
 .kanban-col-label { font-family: var(--fm); font-size: 9px; letter-spacing: .14em; color: var(--fg-4); text-transform: uppercase; flex: 1; }
 .kanban-count { font-family: var(--fm); font-size: 9px; color: var(--fg-5); }
@@ -306,14 +306,14 @@
 /* ── BOTTOM SHEET MODAL ── */
 .bottom-sheet { position: fixed; inset: 0; z-index: 999; display: flex; flex-direction: column; justify-content: flex-end; }
 .bs-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.7); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
-.bs-content { position: relative; background: var(--bg-2); border-top: 1px solid var(--line-2); border-radius: 20px 20px 0 0; padding: 0 16px calc(16px + env(safe-area-inset-bottom,0px)); max-height: 90vh; overflow-y: auto; animation: sheet-up var(--d-sheet) var(--ease-out); }
+.bs-content { position: relative; background: var(--bg-2); border-top: 1px solid var(--line-2); border-radius: 20px 20px 0 0; padding: 0 16px calc(16px + env(safe-area-inset-bottom,0px)); max-height: 90vh; max-height: calc(90dvh - env(safe-area-inset-bottom,0px)); overflow-y: auto; overscroll-behavior: contain; animation: sheet-up var(--d-sheet) var(--ease-out); }
 @keyframes sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
 .bs-hdr { display: flex; align-items: center; justify-content: space-between; padding: 16px 0 12px; position: sticky; top: 0; background: var(--bg-2); z-index: 1; }
 .bs-title { font-family: var(--fd); font-size: 12px; font-weight: 700; letter-spacing: 2px; color: var(--fg-1); }
 .bs-close { width: 32px; height: 32px; border-radius: 50%; background: var(--bg-3); border: 1px solid var(--line-1); color: var(--fg-3); cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; -webkit-tap-highlight-color: transparent; }
 
 /* ── CONVERSATIONS LIST ── */
-.conv-sheet { max-height: 88vh; }
+.conv-sheet { max-height: 88vh; max-height: calc(88dvh - env(safe-area-inset-bottom,0px)); }
 .conv-new-btn { margin: 0 0 14px; width: 100%; }
 .conv-list { display: flex; flex-direction: column; gap: 8px; padding-bottom: 8px; }
 .conv-item { display: flex; align-items: stretch; background: var(--bg-3); border: 1px solid var(--line-1); border-radius: 12px; overflow: hidden; transition: border-color .15s, background .15s; }

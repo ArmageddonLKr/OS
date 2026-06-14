@@ -42,7 +42,7 @@ export class UI {
             <div class="msg-av">${role === 'user' ? Icons.user : Icons.orb}</div>
             <div class="mbubble">
                 ${imgHtml}
-                <div class="m-content"${isStatic ? ' id="sb"' : ''}>${isStatic ? '' : this.renderMd(text)}</div>
+                <div class="m-content">${isStatic ? '' : this.renderMd(text)}</div>
             </div>
         `;
 
