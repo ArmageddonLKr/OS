@@ -61,12 +61,15 @@ export class Entertainment {
             const r = await fetch(`${F1_BASE}/current/driverStandings.json`, { signal: AbortSignal.timeout(6000) });
             if (!r.ok) return [];
             const d = await r.json();
-            const list = (d?.MRData?.StandingsTable?.StandingsLists?.[0]?.DriverStandings || []).slice(0, 5).map(s => ({
-                pos: s.position,
-                name: s.Driver.familyName,
-                team: s.Constructors?.[0]?.name || '',
-                pts: s.points
-            }));
+            const list = (d?.MRData?.StandingsTable?.StandingsLists?.[0]?.DriverStandings || [])
+                .slice(0, 5)
+                .map(s => ({
+                    pos: s.position || '?',
+                    name: s.Driver?.familyName || s.Driver?.name || '?',
+                    team: s.Constructors?.[0]?.name || '',
+                    pts: s.points || 0
+                }))
+                .filter(s => s.name !== '?');
             scSet('ent_f1_stand', list);
             return list;
         } catch { return []; }
@@ -206,7 +209,7 @@ export class Entertainment {
     }
 
     static _parseTransfers(d) {
-        const buckets = d?.transfers || d;
+        const buckets = d?.transfers || d || {};
         let arrivalsRaw = buckets?.arrivals || buckets?.in || buckets?.arriving || [];
         let departuresRaw = buckets?.departures || buckets?.out || buckets?.leaving || [];
 
@@ -215,6 +218,9 @@ export class Entertainment {
             arrivalsRaw = buckets.filter(t => (t.direction || t.movement || '').toLowerCase().startsWith('in') || t.type === 'arrival');
             departuresRaw = buckets.filter(t => (t.direction || t.movement || '').toLowerCase().startsWith('out') || t.type === 'departure');
         }
+
+        if (!Array.isArray(arrivalsRaw)) arrivalsRaw = [];
+        if (!Array.isArray(departuresRaw)) departuresRaw = [];
 
         const norm = (t) => ({
             name: t.name || t.player_name || t.playerName || t.player?.name || '?',

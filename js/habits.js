@@ -5,9 +5,21 @@ import { Store } from './store.js';
 
 const K_HAB = 'orbit_habits';
 
+/* Data de Teresina (YYYY-MM-DD) — vira no fuso local, não às 21h pelo UTC */
+function brStr(date) {
+    try {
+        return new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'America/Fortaleza', year: 'numeric', month: '2-digit', day: '2-digit'
+        }).format(date || new Date());
+    } catch (_) {
+        return (date || new Date()).toISOString().slice(0, 10);
+    }
+}
+
 export class Habits {
     static getAll() { return Store.get(K_HAB, []); }
     static save(a) { Store.set(K_HAB, a); }
+    static today() { return brStr(); }
 
     static add(name, icon, freq = 'daily') {
         const all = this.getAll();
@@ -39,14 +51,16 @@ export class Habits {
 
     static getStreak(habit) {
         if (!habit) return 0;
+        const done = new Set(habit.done || []);
         let streak = 0;
         let d = new Date();
         let skippedToday = false;
         while (streak < 366) {
-            const ds = d.toISOString().slice(0, 10);
-            if ((habit.done || []).includes(ds)) {
+            const ds = brStr(d);
+            if (done.has(ds)) {
                 streak++;
             } else {
+                // hoje ainda não feito não quebra streak; falta de ontem pra trás, sim
                 if (!skippedToday) {
                     skippedToday = true;
                     d.setDate(d.getDate() - 1);
@@ -61,19 +75,20 @@ export class Habits {
 
     static getLast30(habit) {
         if (!habit) return [];
+        const done = new Set(habit.done || []);
         const days = [];
         for (let i = 29; i >= 0; i--) {
             const d = new Date();
             d.setDate(d.getDate() - i);
-            const ds = d.toISOString().slice(0, 10);
-            days.push({ date: ds, done: (habit.done || []).includes(ds), day: d.getDate() });
+            const ds = brStr(d);
+            days.push({ date: ds, done: done.has(ds), day: parseInt(ds.slice(8, 10), 10) });
         }
         return days;
     }
 
     static todayStats() {
         const all = this.getAll();
-        const today = new Date().toISOString().slice(0, 10);
+        const today = brStr();
         const done = all.filter(h => (h.done || []).includes(today)).length;
         return { done, total: all.length };
     }

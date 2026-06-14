@@ -366,7 +366,7 @@ class App {
             list.innerHTML = '<div class="dash-empty">Configure hábitos no Hub.</div>';
             return;
         }
-        const today = AI.nowBR().toISOString().slice(0, 10);
+        const today = Habits.today();
         list.innerHTML = habits.map(h => {
             const done = (h.done || []).includes(today);
             const streak = Habits.getStreak(h);
@@ -377,7 +377,7 @@ class App {
     }
 
     toggleHabit(id) {
-        const today = AI.nowBR().toISOString().slice(0, 10);
+        const today = Habits.today();
         Habits.toggle(id, today);
         if (navigator.vibrate) navigator.vibrate(30);
         this.renderHabitsCard();
@@ -1492,7 +1492,7 @@ class App {
         const list = document.getElementById('hab-list');
         if (!list) return;
 
-        const today = new Date().toISOString().slice(0, 10);
+        const today = Habits.today();
 
         if (!habits.length) {
             list.innerHTML = '<div style="padding:16px;color:var(--fg-4);font-size:13px">Nenhum hábito cadastrado ainda.</div>';
@@ -2144,7 +2144,7 @@ class App {
                     UI.addMsg(m.role === 'user' ? 'user' : 'sophy', m.content || '', false, null);
                 }
             });
-            msgsEl.scrollTop = msgsEl.scrollHeight;
+            requestAnimationFrame(() => { msgsEl.scrollTop = msgsEl.scrollHeight; });
         } else if (empty) {
             empty.style.display = 'flex';
         }
@@ -2286,7 +2286,6 @@ class App {
 
         this.busy = true;
         this.hideCmdPalette();
-        this.fullResponse = '';
 
         const cancelBtn = document.getElementById('cancel-btn');
         const sendBtn = document.getElementById('sendbtn');
@@ -2301,21 +2300,27 @@ class App {
         try { inp.focus({ preventScroll: true }); } catch (_) { inp.focus(); }
         setTimeout(() => this._keepKeyboard = false, 400);
 
+        // Conversa-alvo fixada no envio: a resposta sempre cai aqui, mesmo que troque de conversa
+        const convId = Store.getCurConvId();
         const history = Store.getCurMsgs();
         const userMsg = { role: 'user', content: text };
         if (this.pendingImage) userMsg.image = this.pendingImage;
         history.push(userMsg);
-        Store.saveCurMsgs(history);
+        Store.saveMsgsToConv(convId, history);
         this._updateConvTitle();
         this.pendingImage = null;
         this.removeAttach();
 
         const sophyRow = UI.addMsg('sophy', '', true);
-        const sb = document.getElementById('sb');
-        if (sb) sb.innerHTML = '<div class="typing"><div class="tdot"></div><div class="tdot"></div><div class="tdot"></div></div>';
+        const streamEl = sophyRow.querySelector('.m-content'); // referência direta ao nó (sem id global)
+        if (streamEl) streamEl.innerHTML = '<div class="typing"><div class="tdot"></div><div class="tdot"></div><div class="tdot"></div></div>';
 
-        this.abortCtrl = new AbortController();
+        const ctrl = new AbortController();
+        this.abortCtrl = ctrl;
+        let fullResponse = '';
         UI.setStatus('respondendo...');
+
+        const onSameConv = () => Store.getCurConvId() === convId;
 
         try {
             let aiMessages = AI.getWindowedMsgs(history);
@@ -2324,11 +2329,11 @@ class App {
                 try {
                     UI.setStatus('lendo URL...');
                     const jinaRes = await fetch(`https://r.jina.ai/${urlMatch[0]}`, {
-                        signal: this.abortCtrl.signal,
+                        signal: ctrl.signal,
                         headers: { 'Accept': 'text/plain', 'X-No-Cache': 'true' }
                     });
                     if (jinaRes.ok) {
-                        const content = (await jinaRes.text()).slice(0, 3500).trim();
+                        const content = (await jinaRes.text()).slice(0, 3000).trim();
                         if (content) {
                             aiMessages = [...aiMessages];
                             const last = aiMessages[aiMessages.length - 1];
@@ -2347,7 +2352,7 @@ class App {
                 // Sem URL colada, mas a pergunta pede dado fresco → busca na web
                 try {
                     UI.setStatus('buscando na web...');
-                    const found = await AI.webSearch(text, this.abortCtrl.signal);
+                    const found = await AI.webSearch(text, ctrl.signal);
                     if (found) {
                         aiMessages = [...aiMessages];
                         const last = aiMessages[aiMessages.length - 1];
@@ -2355,7 +2360,7 @@ class App {
                             const today = AI.nowBR().toLocaleDateString('pt-BR', { dateStyle: 'full' });
                             aiMessages[aiMessages.length - 1] = {
                                 ...last,
-                                content: last.content + `\n\n[BUSCA WEB — ${today}. Use isto como fonte real e cite o que importar, mas responda do SEU jeito:\n${found}\nFIM DA BUSCA]`
+                                content: last.content + `\n\n[BUSCA WEB — ${today}. Filtre o que é relevante, ignore ruído e responda do SEU jeito, citando fonte quando importar:\n${found}\nFIM DA BUSCA]`
                             };
                         }
                         UI.toast('Internet consultada 🌐', 'ok');
@@ -2365,58 +2370,55 @@ class App {
             }
 
             const result = await AI.streamRequest(
-                { messages: aiMessages, signal: this.abortCtrl.signal },
+                { messages: aiMessages, signal: ctrl.signal },
                 (delta) => {
-                    this.fullResponse += delta;
-                    const el = document.getElementById('sb');
-                    if (el) el.textContent = this.fullResponse;
-                    const msgs = document.getElementById('msgs');
-                    if (msgs) msgs.scrollTop = msgs.scrollHeight;
+                    if (ctrl.signal.aborted) return; // ignora deltas tardios após cancelar/trocar
+                    fullResponse += delta;
+                    if (streamEl) streamEl.textContent = fullResponse;
+                    if (onSameConv()) {
+                        const msgs = document.getElementById('msgs');
+                        if (msgs) msgs.scrollTop = msgs.scrollHeight;
+                    }
                 }
             );
 
-            const finalEl = document.getElementById('sb');
-            if (finalEl) {
-                finalEl.removeAttribute('id');
-                finalEl.innerHTML = UI.renderMd(this.fullResponse);
-            }
+            if (streamEl) streamEl.innerHTML = UI.renderMd(fullResponse);
 
-            history.push({ role: 'assistant', content: this.fullResponse });
-            Store.saveCurMsgs(history);
-            this._updateConvTitle();
+            history.push({ role: 'assistant', content: fullResponse });
+            Store.saveMsgsToConv(convId, history);
+            if (onSameConv()) this._updateConvTitle();
 
-            if (history.length % 12 === 0) AI.summarizeSession(history);
-            this._cacheResponse(text, this.fullResponse);
+            if (history.length % 24 === 0) AI.summarizeSession(history);
+            this._cacheResponse(text, fullResponse);
             if (result?.provider) this.updateQuota(result.provider);
-            if (this._hf && this.fullResponse) setTimeout(() => this.speak(this.fullResponse), 400);
+            if (this._hf && fullResponse && onSameConv()) setTimeout(() => this.speak(fullResponse), 400);
 
         } catch (err) {
-            const finalEl = document.getElementById('sb');
             if (err.name === 'AbortError') {
-                if (finalEl) {
-                    finalEl.removeAttribute('id');
-                    finalEl.innerHTML = this.fullResponse ? UI.renderMd(this.fullResponse) : '<em style="color:var(--fg-4)">Cancelado.</em>';
+                if (streamEl) {
+                    streamEl.innerHTML = fullResponse ? UI.renderMd(fullResponse) : '<em style="color:var(--fg-4)">Cancelado.</em>';
+                }
+                // Salva o que já veio, na conversa certa
+                if (fullResponse) {
+                    history.push({ role: 'assistant', content: fullResponse });
+                    Store.saveMsgsToConv(convId, history);
                 }
             } else if (!navigator.onLine || err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError')) {
                 const cached = this._findCachedResponse(text);
-                if (finalEl) finalEl.removeAttribute('id');
                 if (cached) {
-                    if (finalEl) finalEl.innerHTML = UI.renderMd(cached.a) + '<div class="cache-badge">📦 resposta em cache (offline)</div>';
+                    if (streamEl) streamEl.innerHTML = UI.renderMd(cached.a) + '<div class="cache-badge">📦 resposta em cache (offline)</div>';
                     history.push({ role: 'assistant', content: cached.a });
-                    Store.saveCurMsgs(history);
-                } else {
-                    if (finalEl) finalEl.innerHTML = '<span class="merr">Sem conexão. Sem cache para esta pergunta.</span>';
+                    Store.saveMsgsToConv(convId, history);
+                } else if (streamEl) {
+                    streamEl.innerHTML = '<span class="merr">Sem conexão. Sem cache para esta pergunta.</span>';
                 }
                 UI.toast('Offline — usando cache', 'err');
             } else {
-                if (finalEl) {
-                    finalEl.removeAttribute('id');
-                    finalEl.innerHTML = `<span class="merr">Erro: ${err.message}</span>`;
-                }
+                if (streamEl) streamEl.innerHTML = `<span class="merr">Erro: ${err.message}</span>`;
                 UI.toast('Falha na requisição', 'err');
             }
         } finally {
-            this.abortCtrl = null;
+            if (this.abortCtrl === ctrl) this.abortCtrl = null;
             if (cancelBtn) cancelBtn.style.display = 'none';
             if (sendBtn) sendBtn.style.display = '';
             this.busy = false;

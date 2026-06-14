@@ -119,16 +119,25 @@ export class Faith {
 
     static getReadingProgress() { return Store.get('orbit_fe_reading', []); }
 
+    static _brStr(date) {
+        try {
+            return new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'America/Fortaleza', year: 'numeric', month: '2-digit', day: '2-digit'
+            }).format(date || new Date());
+        } catch (_) { return (date || new Date()).toISOString().slice(0, 10); }
+    }
+
     static markRead(idx) {
         const arr = this.getReadingProgress();
-        const today = new Date().toISOString().slice(0, 10);
+        const today = this._brStr();
         if (!arr.includes(idx)) { arr.push(idx); Store.set('orbit_fe_reading', arr); }
         // streak
         let streak = parseInt(localStorage.getItem('orbit_fe_streak') || '0');
         const lastDay = localStorage.getItem('orbit_fe_streak_day');
+        if (lastDay === today) return; // já contou hoje
         const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
-        if (lastDay === yesterday.toISOString().slice(0, 10)) streak++;
-        else if (lastDay !== today) streak = 1;
+        if (lastDay === this._brStr(yesterday)) streak++;
+        else streak = 1;
         localStorage.setItem('orbit_fe_streak', streak.toString());
         localStorage.setItem('orbit_fe_streak_day', today);
     }

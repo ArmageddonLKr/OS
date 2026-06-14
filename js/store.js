@@ -107,7 +107,7 @@ const DFLT = {
     maxEp:     15,
     autoSave:  true,
     prompt:    DEFAULT_PROMPT,
-    msgWindow: 20,
+    msgWindow: 24,
     tts:       false,
     theme:     'midnight',
     fontSize:  'md'
@@ -232,8 +232,12 @@ export class Store {
     static getCurMsgs() { return this.getCurConv().msgs || []; }
 
     static saveCurMsgs(msgs) {
+        this.saveMsgsToConv(this.getCurConvId(), msgs);
+    }
+
+    /* Salva numa conversa específica (resposta não vaza se o usuário trocar de conversa) */
+    static saveMsgsToConv(id, msgs) {
         const list = this.getConvs();
-        const id = this.getCurConvId();
         const idx = list.findIndex(c => c.id === id);
         if (idx < 0) return;
         list[idx].msgs = msgs.slice(-100);
