@@ -1,12 +1,14 @@
 {
-  "name": "OS",
+  "name": "OS — Orbit Sophy",
   "short_name": "OS",
-  "description": "Nascida no escuro. Afiada no osso.",
+  "description": "Seu sistema operacional pessoal. Organiza vida, IA integrada, finanças, agenda, fé e mais.",
   "start_url": "./",
   "scope": "./",
+  "id": "./",
   "display": "standalone",
-  "background_color": "#000008",
-  "theme_color": "#000008",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "background_color": "#000000",
+  "theme_color": "#000000",
   "orientation": "portrait",
   "icons": [
     {
@@ -36,9 +38,9 @@
   ],
   "shortcuts": [
     {
-      "name": "Chat rápido",
+      "name": "Chat com a Orbit",
       "short_name": "Chat",
-      "description": "Falar com a Orbit",
+      "description": "Abrir o chat direto",
       "url": "./?m=chat",
       "icons": [{ "src": "./icon-192.png", "sizes": "192x192" }]
     },
@@ -52,14 +54,14 @@
     {
       "name": "Novo gasto",
       "short_name": "Gasto",
-      "description": "Lançar despesa",
+      "description": "Lançar despesa rapidamente",
       "url": "./?action=expense",
       "icons": [{ "src": "./icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Pomodoro",
       "short_name": "Pomo",
-      "description": "Iniciar Pomodoro",
+      "description": "Iniciar sessão Pomodoro",
       "url": "./?action=pomodoro",
       "icons": [{ "src": "./icon-192.png", "sizes": "192x192" }]
     }
@@ -79,7 +81,12 @@
       "url": "url"
     }
   },
-  "categories": ["productivity", "lifestyle", "utilities"],
+  "handle_links": "preferred",
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  },
+  "categories": ["productivity", "lifestyle", "utilities", "personalization"],
   "lang": "pt-BR",
-  "dir": "ltr"
+  "dir": "ltr",
+  "prefer_related_applications": false
 }

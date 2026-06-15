@@ -138,6 +138,19 @@ class App {
     }
 
     /* ── PIN ── */
+    /* ── HASH DO PIN (SHA-256 + salt) ── */
+    async _hashPin(pin) {
+        try {
+            const encoder = new TextEncoder();
+            const data = encoder.encode('orbit_s4lt_' + pin);
+            const hash = await crypto.subtle.digest('SHA-256', data);
+            return Array.from(new Uint8Array(hash))
+                .map(b => b.toString(16).padStart(2, '0')).join('');
+        } catch (_) {
+            return String(pin);
+        }
+    }
+
     pinKey(digit) {
         if (!digit || this.pinBuffer.length >= 4) return;
         if (navigator.vibrate) navigator.vibrate(30);
@@ -159,16 +172,31 @@ class App {
         });
     }
 
-    processPin() {
+    async processPin() {
         const stored = Store.get(K.pin);
         if (this.pinMode === 'set') {
-            Store.set(K.pin, this.pinBuffer);
+            const hash = await this._hashPin(this.pinBuffer);
+            Store.set(K.pin, hash);
             this.pinBuffer = '';
             this.updatePinDots();
             if (navigator.vibrate) navigator.vibrate(50);
             this.enterApp();
         } else {
-            if (this.pinBuffer === String(stored)) {
+            let isMatch = false;
+            // Migração: PIN antigo em texto plano (4 dígitos)
+            if (stored && stored.length === 4 && /^\d{4}$/.test(stored)) {
+                isMatch = this.pinBuffer === stored;
+                if (isMatch) {
+                    // Migra para hash seguro
+                    const hash = await this._hashPin(stored);
+                    Store.set(K.pin, hash);
+                }
+            } else {
+                const hash = await this._hashPin(this.pinBuffer);
+                isMatch = hash === stored;
+            }
+
+            if (isMatch) {
                 this.pinBuffer = '';
                 this.updatePinDots();
                 if (navigator.vibrate) navigator.vibrate(50);
@@ -189,9 +217,6 @@ class App {
     enterApp() {
         const pin = document.getElementById('pinscreen');
         if (!pin) return;
-        if ('Notification' in window && Notification.permission === 'default') {
-            Notification.requestPermission().catch(() => {});
-        }
         pin.style.opacity = '0';
         pin.style.transition = 'opacity 0.35s';
         setTimeout(() => {
@@ -200,6 +225,8 @@ class App {
             document.getElementById('app').style.flexDirection = 'column';
             this.loadDashboard();
             this.loadChat();
+            this.setupNetworkMonitor();
+            this.setupConfirmDialog();
             if (this._pendingOpenChat) { this._pendingOpenChat = false; this.openChat(); }
             if (this._pendingPomodoro) { this._pendingPomodoro = false; this.switchTab('academia'); setTimeout(() => this.switchAcad('pomo'), 300); }
             if (this._pendingAgenda) { this._pendingAgenda = false; setTimeout(() => this.switchTab('agenda'), 300); }
@@ -210,7 +237,119 @@ class App {
                     setTimeout(() => { this.activeTab = 'ai'; this.openPanel(); }, 800);
                 }
             }
+            // Pede permissão de notificação de forma não intrusiva (5s após entrar)
+            setTimeout(() => this._requestNotifPermission(), 5000);
+            // Agenda notificações do dia
+            setTimeout(() => this._scheduleAgendaNotifications(), 2000);
         }, 350);
+    }
+
+    /* ── DETECÇÃO DE REDE ── */
+    setupNetworkMonitor() {
+        if (this._networkMonitorSetup) return;
+        this._networkMonitorSetup = true;
+
+        const banner = document.createElement('div');
+        banner.id = 'offline-banner';
+        document.body.appendChild(banner);
+
+        let hideTimer = null;
+
+        const showOnline = () => {
+            banner.innerHTML = '<span class="offline-dot"></span>Conexão restaurada';
+            banner.className = 'online show';
+            UI.setStatus('online');
+            if (hideTimer) clearTimeout(hideTimer);
+            hideTimer = setTimeout(() => banner.classList.remove('show'), 2800);
+        };
+
+        const showOffline = () => {
+            banner.innerHTML = '<span class="offline-dot"></span>Sem conexão — dados em cache disponíveis';
+            banner.className = 'offline show';
+            UI.setStatus('offline', 'offline');
+            if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+        };
+
+        if (!navigator.onLine) showOffline();
+
+        window.addEventListener('offline', showOffline);
+        window.addEventListener('online', showOnline);
+    }
+
+    /* ── DIALOG DE CONFIRMAÇÃO PERSONALIZADO ── */
+    setupConfirmDialog() {
+        if (document.getElementById('confirm-dialog')) return;
+        const el = document.createElement('div');
+        el.id = 'confirm-dialog';
+        el.innerHTML = `
+            <div class="confirm-sheet">
+                <div class="confirm-title" id="cdlg-title">Confirmar</div>
+                <div class="confirm-msg" id="cdlg-msg"></div>
+                <div class="confirm-btns">
+                    <button class="confirm-cancel" id="cdlg-cancel">Cancelar</button>
+                    <button class="confirm-ok" id="cdlg-ok">Confirmar</button>
+                </div>
+            </div>`;
+        document.body.appendChild(el);
+        document.getElementById('cdlg-cancel').addEventListener('click', () => this._resolveConfirm(false));
+        el.addEventListener('click', e => { if (e.target === el) this._resolveConfirm(false); });
+    }
+
+    _confirm(msg, opts = {}) {
+        return new Promise(resolve => {
+            this._resolveConfirm = (val) => {
+                const dlg = document.getElementById('confirm-dialog');
+                if (dlg) dlg.classList.remove('show');
+                resolve(val);
+            };
+            const dlg = document.getElementById('confirm-dialog');
+            if (!dlg) { resolve(window.confirm(msg)); return; }
+            document.getElementById('cdlg-title').textContent = opts.title || 'Confirmar';
+            document.getElementById('cdlg-msg').textContent = msg;
+            const ok = document.getElementById('cdlg-ok');
+            ok.textContent = opts.okLabel || 'Confirmar';
+            ok.className = `confirm-ok${opts.danger ? ' danger' : ''}`;
+            ok.onclick = () => this._resolveConfirm(true);
+            dlg.classList.add('show');
+        });
+    }
+
+    /* ── PERMISSÃO DE NOTIFICAÇÃO ── */
+    async _requestNotifPermission() {
+        if (!('Notification' in window)) return;
+        if (Notification.permission === 'granted') return;
+        if (Notification.permission === 'denied') return;
+        // Só pede se o usuário ainda não decidiu
+        try { await Notification.requestPermission(); } catch (_) {}
+    }
+
+    /* ── AGENDA: NOTIFICAÇÕES DO DIA ── */
+    _scheduleAgendaNotifications() {
+        if (!('Notification' in window) || Notification.permission !== 'granted') return;
+        try {
+            const now = AI.nowBR();
+            const today = now.toISOString().slice(0, 10);
+            const events = (Store.get(K.agenda, []) || []).filter(e => e.date === today && e.time);
+
+            events.forEach(evt => {
+                const [hh, mm] = (evt.time || '').split(':').map(Number);
+                if (isNaN(hh)) return;
+                const evtMs = new Date(now).setHours(hh, mm - 10, 0, 0); // avisa 10min antes
+                const delay = evtMs - Date.now();
+                if (delay < 0 || delay > 24 * 60 * 60 * 1000) return;
+                setTimeout(() => {
+                    try {
+                        new Notification('OS — Agenda', {
+                            body: `Em 10 min: ${evt.title} às ${evt.time}`,
+                            icon: './icon-192.png',
+                            badge: './icon-192.png',
+                            tag: `evt-${evt.id}`,
+                            silent: false
+                        });
+                    } catch (_) {}
+                }, delay);
+            });
+        } catch (_) {}
     }
 
     /* ── NAVIGATION ── */
@@ -273,9 +412,12 @@ class App {
         this.renderFinanceCard();
         this.renderHabitsCard();
         this.renderVerseCard();
-        this.loadWeather();
-        this.loadCambio();
-        this.renderSportsCard();
+        // Carrega APIs em paralelo — não bloqueia o render
+        Promise.all([
+            this.loadWeather(),
+            this.loadCambio(),
+            this.renderSportsCard()
+        ]).catch(() => {});
     }
 
     renderGreeting() {
@@ -396,7 +538,7 @@ class App {
         if (text) text.textContent = `"${v.t}"`;
     }
 
-    async loadWeather() {
+    async loadWeather(retry = 0) {
         const cached = sessionStorage.getItem('orbit_weather');
         const cachedTime = parseInt(sessionStorage.getItem('orbit_weather_ts') || '0');
         const AGE = 30 * 60 * 1000;
@@ -405,15 +547,25 @@ class App {
             data = JSON.parse(cached);
         } else {
             try {
-                const res = await fetch(WEATHER_URL);
-                if (!res.ok) throw new Error();
+                const res = await fetch(WEATHER_URL, { signal: AbortSignal.timeout(6000) });
+                if (!res.ok) throw new Error('status ' + res.status);
                 data = await res.json();
                 sessionStorage.setItem('orbit_weather', JSON.stringify(data));
                 sessionStorage.setItem('orbit_weather_ts', Date.now().toString());
-            } catch (_) {
-                document.getElementById('weather-temp').textContent = '--°';
-                document.getElementById('weather-desc').textContent = 'Sem conexão';
-                return;
+            } catch (err) {
+                if (retry < 2 && navigator.onLine) {
+                    await new Promise(r => setTimeout(r, (retry + 1) * 1500));
+                    return this.loadWeather(retry + 1);
+                }
+                // Mostra dado em cache se disponível, senão placeholder
+                if (cached) {
+                    try { data = JSON.parse(cached); } catch (_) {}
+                }
+                if (!data) {
+                    document.getElementById('weather-temp').textContent = '--°';
+                    document.getElementById('weather-desc').textContent = navigator.onLine ? 'Erro de rede' : 'Offline';
+                    return;
+                }
             }
         }
         const cur = data?.current;
@@ -421,25 +573,38 @@ class App {
         const code = cur.weathercode ?? 0;
         const [icon, desc] = WMO_ICONS[code] || ['🌡️', 'Teresina'];
         const temp = Math.round(cur.temperature_2m ?? 0);
-        document.getElementById('weather-icon').textContent = icon;
-        document.getElementById('weather-temp').textContent = `${temp}°`;
-        document.getElementById('weather-desc').textContent = desc;
+        const iconEl = document.getElementById('weather-icon');
+        const tempEl = document.getElementById('weather-temp');
+        const descEl = document.getElementById('weather-desc');
+        if (iconEl) iconEl.textContent = icon;
+        if (tempEl) tempEl.textContent = `${temp}°`;
+        if (descEl) descEl.textContent = desc;
     }
 
-    async loadCambio() {
+    async loadCambio(retry = 0) {
         const cached = sessionStorage.getItem('orbit_cambio');
         const cachedTs = parseInt(sessionStorage.getItem('orbit_cambio_ts') || '0');
         let data;
         if (cached && Date.now() - cachedTs < 15 * 60 * 1000) {
-            data = JSON.parse(cached);
-        } else {
+            try { data = JSON.parse(cached); } catch (_) {}
+        }
+        if (!data) {
             try {
-                const res = await fetch(CAMBIO_URL);
-                if (!res.ok) throw new Error();
+                const res = await fetch(CAMBIO_URL, { signal: AbortSignal.timeout(6000) });
+                if (!res.ok) throw new Error('status ' + res.status);
                 data = await res.json();
                 sessionStorage.setItem('orbit_cambio', JSON.stringify(data));
                 sessionStorage.setItem('orbit_cambio_ts', Date.now().toString());
-            } catch (_) { return; }
+            } catch (err) {
+                if (retry < 2 && navigator.onLine) {
+                    await new Promise(r => setTimeout(r, (retry + 1) * 1500));
+                    return this.loadCambio(retry + 1);
+                }
+                // Tenta cache mais antigo
+                if (cached) {
+                    try { data = JSON.parse(cached); } catch (_) { return; }
+                } else { return; }
+            }
         }
         const fmt = (obj) => {
             if (!obj) return null;
@@ -458,7 +623,7 @@ class App {
     async renderSportsCard() {
         const el = document.getElementById('dash-sports-content');
         if (!el) return;
-        el.innerHTML = '<div class="dash-empty">Carregando...</div>';
+        el.innerHTML = UI.loading('Buscando dados esportivos...');
 
         const teams = Entertainment.getTeams();
         const firstTeam = teams[0] || null;
@@ -666,9 +831,10 @@ class App {
         this._renderCalendar();
     }
 
-    deleteEvt() {
+    async deleteEvt() {
         if (!this._editingEvtId) return;
-        if (!confirm('Excluir este evento?')) return;
+        const ok = await this._confirm('Excluir este evento permanentemente?', { title: 'Excluir Evento', okLabel: 'Excluir', danger: true });
+        if (!ok) return;
         Agenda.remove(this._editingEvtId);
         UI.toast('Evento removido.', 'ok');
         this.closeEvtModal();
@@ -845,8 +1011,9 @@ class App {
         });
     }
 
-    _deleteTxPrompt(id) {
-        if (!confirm('Excluir esta transação?')) return;
+    async _deleteTxPrompt(id) {
+        const ok = await this._confirm('Excluir esta transação?', { title: 'Excluir Transação', okLabel: 'Excluir', danger: true });
+        if (!ok) return;
         Finance.remove(id);
         this.renderFinanceSec();
         UI.toast('Removido.', 'ok');
@@ -1040,7 +1207,9 @@ class App {
     }
 
     async deleteVaultEntry() {
-        if (!this._editingVltId || !confirm('Excluir este acesso?')) return;
+        if (!this._editingVltId) return;
+        const ok = await this._confirm('Excluir este acesso do cofre?', { title: 'Excluir Acesso', okLabel: 'Excluir', danger: true });
+        if (!ok) return;
         await Vault.remove(this._editingVltId);
         UI.toast('Removido.', 'ok');
         this.closeVaultModal();
@@ -1323,14 +1492,39 @@ class App {
                 o.frequency.value = freq;
                 const t = ctx.currentTime + i * 0.22;
                 g.gain.setValueAtTime(0.35, t);
-                g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
-                o.start(t); o.stop(t + 0.18);
+                g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+                o.start(t); o.stop(t + 0.25);
             });
-            setTimeout(() => ctx.close(), 1500);
-        } catch {}
+            setTimeout(() => ctx.close().catch(() => {}), 2000);
+        } catch (_) {}
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 400]);
         if ('Notification' in window && Notification.permission === 'granted') {
-            try { new Notification('OS', { body: 'Pomodoro completo! Hora da pausa.', icon: './icon-192.png', silent: true }); } catch {}
+            try {
+                new Notification('OS — Pomodoro 🍅', {
+                    body: 'Sessão completa! Bora descansar um pouco.',
+                    icon: './icon-192.png',
+                    badge: './icon-192.png',
+                    tag: 'pomo-done',
+                    renotify: true,
+                    silent: false
+                });
+            } catch (_) {}
         }
+    }
+
+    /* Feedback tátil categorizado */
+    _haptic(type = 'light') {
+        if (!navigator.vibrate) return;
+        const patterns = {
+            light:   [25],
+            medium:  [40],
+            heavy:   [70],
+            success: [40, 30, 80],
+            error:   [80, 60, 80],
+            warning: [50, 50, 50],
+            double:  [30, 50, 30]
+        };
+        navigator.vibrate(patterns[type] || patterns.light);
     }
 
     /* ═══════════════════════════════════════════════
@@ -1998,7 +2192,13 @@ class App {
     /* ── NOTÍCIAS ──────────────────────────────────── */
     _renderNewsSkeleton() {
         const el = document.getElementById('sport-news-list');
-        if (el) el.innerHTML = '<div style="color:var(--fg-4);font-size:13px;padding:8px 0">Carregando notícias...</div>';
+        if (!el) return;
+        el.innerHTML = [1,2,3,4].map(() => `
+            <div class="skeleton-card" style="padding:12px;margin-bottom:6px">
+                <div class="skeleton skeleton-line lg w80" style="margin-bottom:8px"></div>
+                <div class="skeleton skeleton-line sm w40"></div>
+            </div>
+        `).join('');
     }
 
     reloadNews() {
@@ -2225,8 +2425,9 @@ class App {
         setTimeout(() => document.getElementById('msginput')?.focus(), 200);
     }
 
-    deleteConv(id) {
-        if (!confirm('Apagar essa conversa?')) return;
+    async deleteConv(id) {
+        const ok = await this._confirm('Apagar esta conversa?', { title: 'Apagar Conversa', okLabel: 'Apagar', danger: true });
+        if (!ok) return;
         const wasActive = Store.getCurConvId() === id;
         if (wasActive && this.busy && this.abortCtrl) { this.abortCtrl.abort(); this.abortCtrl = null; this.busy = false; }
         Store.removeConv(id);
@@ -2407,23 +2608,38 @@ class App {
                 if (streamEl) {
                     streamEl.innerHTML = fullResponse ? UI.renderMd(fullResponse) : '<em style="color:var(--fg-4)">Cancelado.</em>';
                 }
-                // Salva o que já veio, na conversa certa
                 if (fullResponse) {
                     history.push({ role: 'assistant', content: fullResponse });
                     Store.saveMsgsToConv(convId, history);
                 }
-            } else if (!navigator.onLine || err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError')) {
+            } else if (!navigator.onLine || err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError') || err.message?.includes('Load failed')) {
                 const cached = this._findCachedResponse(text);
                 if (cached) {
-                    if (streamEl) streamEl.innerHTML = UI.renderMd(cached.a) + '<div class="cache-badge">📦 resposta em cache (offline)</div>';
+                    if (streamEl) streamEl.innerHTML = UI.renderMd(cached.a) + '<div class="cache-badge">📦 cache · sem conexão</div>';
                     history.push({ role: 'assistant', content: cached.a });
                     Store.saveMsgsToConv(convId, history);
                 } else if (streamEl) {
-                    streamEl.innerHTML = '<span class="merr">Sem conexão. Sem cache para esta pergunta.</span>';
+                    streamEl.innerHTML = UI.apiError('Sem conexão com a internet. Verifique sua rede e tente novamente.', () => {
+                        streamEl.innerHTML = '';
+                        // remove a resposta vazia do histórico e tenta novamente
+                        history.pop();
+                        Store.saveMsgsToConv(convId, history);
+                    });
                 }
-                UI.toast('Offline — usando cache', 'err');
+                UI.toast('Sem conexão', 'warn', 4000);
+            } else if (err.message?.includes('NO_GROQ_KEY') || err.message?.includes('API Key')) {
+                if (streamEl) streamEl.innerHTML = UI.apiError('Chave de API não configurada. Vá em Configurações → IA para adicionar.', () => {
+                    this.hideMsgCtx(); this.activeTab = 'ai'; this.openPanel();
+                });
+                UI.toast('Configure a API Key', 'warn', 5000);
+            } else if (err.message?.includes('429') || err.message?.toLowerCase().includes('rate')) {
+                if (streamEl) streamEl.innerHTML = UI.apiError('Limite de requisições atingido. Aguarde alguns segundos e tente de novo.', null);
+                UI.toast('Limite de API — tente em breve', 'warn', 5000);
             } else {
-                if (streamEl) streamEl.innerHTML = `<span class="merr">Erro: ${err.message}</span>`;
+                const friendly = err.message?.includes('401') ? 'Chave de API inválida. Verifique em Configurações → IA.'
+                    : err.message?.includes('500') || err.message?.includes('502') ? 'Serviço temporariamente indisponível. Tente novamente.'
+                    : 'Algo deu errado. Tente novamente em instantes.';
+                if (streamEl) streamEl.innerHTML = UI.apiError(friendly, null);
                 UI.toast('Falha na requisição', 'err');
             }
         } finally {
@@ -2863,8 +3079,9 @@ class App {
         if (el) { Store.saveNuc(el.value); UI.toast('Núcleo salvo!', 'ok'); }
     }
 
-    clearMem() {
-        if (!confirm('Limpar memórias episódicas?')) return;
+    async clearMem() {
+        const ok = await this._confirm('Apagar todas as memórias episódicas? Isso não pode ser desfeito.', { title: 'Limpar Memórias', okLabel: 'Limpar', danger: true });
+        if (!ok) return;
         Store.saveEp([]);
         this.renderPanelTab('mem');
         UI.toast('Memórias limpas.', 'ok');
@@ -2937,7 +3154,8 @@ class App {
             try {
                 const text = await file.text();
                 const d = JSON.parse(text);
-                if (!confirm(`Importar backup de ${file.name}?\nDados atuais serão substituídos.`)) return;
+                const ok = await this._confirm(`Importar backup de ${file.name}? Os dados atuais serão substituídos.`, { title: 'Importar Backup', okLabel: 'Importar' });
+                if (!ok) return;
                 if (d.config) { const cfg = { ...Store.getCfg(), ...d.config }; Store.saveCfg(cfg); }
                 if (d.nuc) Store.saveNuc(d.nuc);
                 if (d.ep) Store.saveEp(d.ep);
@@ -2958,19 +3176,21 @@ class App {
                 if (d.vault_chk) localStorage.setItem('orbit_vault_check', d.vault_chk);
                 UI.toast('Backup importado! Recarregando...', 'ok');
                 setTimeout(() => location.reload(), 1200);
-            } catch { UI.toast('Arquivo inválido.', 'err'); }
+            } catch { UI.toast('Arquivo inválido ou corrompido.', 'err'); }
         };
         inp.click();
     }
 
-    pinReset() {
-        if (!confirm('Redefinir o PIN? Os seus dados permanecem. Só o código de acesso será apagado.')) return;
+    async pinReset() {
+        const ok = await this._confirm('Redefinir o PIN? Seus dados permanecem. Só o código de acesso será apagado.', { title: 'Redefinir PIN', okLabel: 'Redefinir' });
+        if (!ok) return;
         localStorage.removeItem('orbit_pin');
         location.reload();
     }
 
-    resetPin() {
-        if (!confirm('Trocar o PIN? Você vai precisar criar um novo.')) return;
+    async resetPin() {
+        const ok = await this._confirm('Trocar o PIN? Você vai precisar criar um novo.', { title: 'Trocar PIN', okLabel: 'Trocar' });
+        if (!ok) return;
         localStorage.removeItem(K.pin);
         this.pinBuffer = '';
         this.pinMode = 'set';
@@ -2981,8 +3201,9 @@ class App {
         document.getElementById('pinscreen').style.opacity = '1';
     }
 
-    resetAll() {
-        if (!confirm('Apagar TUDO? Esta ação é irreversível.')) return;
+    async resetAll() {
+        const ok = await this._confirm('Apagar TUDO? Finanças, agenda, hábitos, memórias — esta ação é irreversível.', { title: 'Reset Total', okLabel: 'Apagar Tudo', danger: true });
+        if (!ok) return;
         localStorage.clear();
         location.reload();
     }
@@ -3066,8 +3287,6 @@ class App {
         document.getElementById('file-inp')?.addEventListener('change', (e) => this.onFileSelect(e));
         document.getElementById('cam-inp')?.addEventListener('change', (e) => this.onFileSelect(e));
 
-        window.addEventListener('popstate', () => { if (this.chatOpen) this.closeChat(false); });
-
         const msgs = document.getElementById('msgs');
         if (msgs) {
             msgs.addEventListener('scroll', () => {
@@ -3084,6 +3303,15 @@ class App {
             const pal = document.getElementById('cmd-palette');
             const textarea = document.getElementById('msginput');
             if (pal && pal.style.display !== 'none' && !pal.contains(e.target) && e.target !== textarea) this.hideCmdPalette();
+        });
+
+        // Botão de hardware "voltar" no Android fecha chat/painel/modal aberto
+        window.addEventListener('popstate', (e) => {
+            if (this.chatOpen) { this.closeChat(false); return; }
+            const panel = document.getElementById('panel');
+            if (panel?.classList.contains('open')) { this.closePanel(); return; }
+            const ctx = document.getElementById('ctx');
+            if (ctx?.classList.contains('open')) { this.closeCtx(); return; }
         });
     }
 
@@ -3109,7 +3337,25 @@ class App {
     }
 
     initPWA() {
-        if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js').then(reg => {
+                // Notifica o SW para pular o waiting se houver update
+                reg.addEventListener('updatefound', () => {
+                    const newSW = reg.installing;
+                    if (!newSW) return;
+                    newSW.addEventListener('statechange', () => {
+                        if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+                            newSW.postMessage({ type: 'SKIP_WAITING' });
+                        }
+                    });
+                });
+            }).catch(() => {});
+            // Recarrega ao receber novo SW ativo
+            let refreshing = false;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (!refreshing) { refreshing = true; location.reload(); }
+            });
+        }
         if ('storage' in navigator && 'persist' in navigator.storage) navigator.storage.persist().catch(() => {});
     }
 }

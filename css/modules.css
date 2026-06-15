@@ -327,4 +327,119 @@
 .conv-item-del { background: none; border: none; color: var(--fg-4); font-size: 20px; line-height: 1; cursor: pointer; padding: 0 4px; -webkit-tap-highlight-color: transparent; }
 .conv-item-del:active { color: var(--err, #ff5555); }
 
+/* ════════════════════════════════════════════════════════════════
+   MELHORIAS v27 — Módulos
+   ════════════════════════════════════════════════════════════════ */
+
+/* ── BOTTOM SHEETS: animação consistente ── */
+[id$="-modal"] {
+  animation: sheetSlideUp 0.32s cubic-bezier(.22,1,.36,1) both;
+}
+@keyframes sheetSlideUp {
+  from { opacity: 0; transform: translateY(40px) scale(.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ── FEEDBACK DE TOQUE NAS ACTIONS ── */
+.fin-filter:active, .tx-type:active, .pomo-profile:active,
+.fe-tab:active, .mod-stab:active {
+  transform: scale(.94);
+  transition: transform .1s;
+}
+
+/* ── SWIPE-TO-DELETE MELHORADO ── */
+.tx-item { will-change: transform; transition: transform .25s ease, opacity .25s ease; }
+
+/* ── KANBAN: estados visuais melhores ── */
+.kanban-card { transition: transform .18s var(--ease-out), box-shadow .18s; }
+.kanban-card:active { transform: scale(.97); box-shadow: 0 4px 16px rgba(0,0,0,.5); }
+
+/* ── HÁBITOS: feedback visual ao marcar ── */
+.hab-toggle-btn { transition: background .2s, color .2s, transform .15s; }
+.hab-toggle-btn:active { transform: scale(.95); }
+.hab-toggle-btn.done {
+  background: rgba(74,208,138,.15);
+  border-color: rgba(74,208,138,.4);
+  color: var(--ok);
+}
+
+/* ── NOTÍCIAS: hover state mais claro ── */
+.news-item { border-radius: var(--r-md); }
+.news-item:active { background: var(--bg-3) !important; }
+
+/* ── VAULT: input de senha com toggle ── */
+.vault-pass-row { position: relative; }
+.vlt-pass-toggle {
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; color: var(--fg-4); cursor: pointer;
+  font-size: 13px; font-family: var(--fm); padding: 4px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── DASHBOARD: cards com hover ── */
+.dash-card {
+  transition: transform .18s var(--ease-out), box-shadow .18s;
+}
+.dash-card:active { transform: scale(.99); }
+
+/* ── AGENDA: day select animation ── */
+.cal-day { transition: background .12s, transform .1s; }
+.cal-day:active { transform: scale(.88); }
+.cal-day.selected { transform: scale(1); }
+
+/* ── ESTADO VAZIO MELHORADO ── */
+.dash-empty {
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; color: var(--fg-4); font-style: italic;
+  padding: 12px 0; text-align: center;
+}
+
+/* ── SCROLL INDICATOR PARA LISTAS ── */
+.mod-section::after {
+  content: '';
+  display: block;
+  height: calc(var(--navbar-h) + env(safe-area-inset-bottom,0px) + 24px);
+}
+
+/* ── ESTILO PARA COPY BUTTON ANIMADO ── */
+.copy-btn:active { transform: scale(.9); }
+
+/* ── POMODORO: timer mais impactante ── */
+#pomo-time {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .04em;
+}
+
+/* ── STAB ATIVOS: transição mais fluida ── */
+.mod-stab {
+  transition: background .18s var(--ease-out), color .18s, border-color .18s, transform .12s, box-shadow .18s;
+}
+
+/* ── F1 COUNTDOWN: destaque ── */
+.f1-countdown {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── SKELETON NOS CARDS DE SPORT ── */
+.sport-team-card.loading .stcg,
+.fighter-card.loading .fc-event {
+  background: linear-gradient(90deg, var(--bg-3) 25%, var(--bg-4) 50%, var(--bg-3) 75%);
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.6s infinite linear;
+  border-radius: var(--r-sm);
+  height: 36px;
+  color: transparent;
+}
+
+/* ── ACESSIBILIDADE: foco visível ── */
+:focus-visible {
+  outline: 2px solid rgba(255,255,255,.5);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+button:focus-visible, a:focus-visible {
+  outline: 2px solid rgba(255,255,255,.5);
+  outline-offset: 3px;
+}
+
 .hdr-conv-title { font-size: 11px; color: var(--fg-4); margin-left: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; display: inline-block; vertical-align: middle; }
