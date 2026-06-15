@@ -2167,3 +2167,155 @@ code.ic { font-family:var(--font-mono); font-size:12px; background:var(--bg-4); 
 }
 .api-error-retry:active { background: var(--bg-4); }
 
+/* ════════════════════════════════════════════════
+   SYMBOL PICKER
+   ════════════════════════════════════════════════ */
+.symbol-picker {
+  background: var(--bg-2);
+  border-top: 1px solid var(--line-1);
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height .28s cubic-bezier(.4,0,.2,1);
+}
+.symbol-picker.open {
+  max-height: 260px;
+}
+
+.sym-cats {
+  display: flex;
+  gap: 4px;
+  padding: 10px 10px 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-shrink: 0;
+}
+.sym-cats::-webkit-scrollbar { display: none; }
+
+.sym-cat-btn {
+  flex-shrink: 0;
+  padding: 5px 10px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line-2);
+  background: var(--bg-3);
+  color: var(--fg-3);
+  font-family: var(--fm);
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.sym-cat-btn.active {
+  background: var(--gold);
+  color: #000;
+  border-color: var(--gold);
+}
+
+.sym-grid {
+  overflow-y: auto;
+  padding: 4px 8px 12px;
+  max-height: 196px;
+}
+.sym-page { display: none; flex-wrap: wrap; gap: 4px; }
+.sym-page.active { display: flex; }
+
+.sym-btn {
+  padding: 6px 8px;
+  min-width: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--line-1);
+  background: var(--bg-3);
+  color: var(--fg-2);
+  font-size: 14px;
+  font-family: var(--fm), serif;
+  cursor: pointer;
+  transition: background .12s, transform .1s;
+  -webkit-tap-highlight-color: transparent;
+  text-align: center;
+  line-height: 1.2;
+}
+.sym-btn:active { background: var(--bg-4); transform: scale(.9); }
+
+/* symbol trigger button active state */
+.sym-trigger.active { color: var(--gold); }
+
+/* ════════════════════════════════════════════════
+   NEWS SUB-TABS
+   ════════════════════════════════════════════════ */
+.news-sub-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 8px 16px 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.news-sub-tabs::-webkit-scrollbar { display: none; }
+
+.news-sub-tab {
+  flex-shrink: 0;
+  padding: 5px 12px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line-2);
+  background: var(--bg-3);
+  color: var(--fg-3);
+  font-family: var(--fm);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.news-sub-tab.active {
+  background: var(--gold);
+  color: #000;
+  border-color: var(--gold);
+  font-weight: 600;
+}
+
+.transfer-badge {
+  font-size: 11px;
+  vertical-align: middle;
+}
+
+/* ════════════════════════════════════════════════
+   TRANSFER WATCHES (alertas)
+   ════════════════════════════════════════════════ */
+.transfer-alert-hint {
+  padding: 4px 16px 8px;
+  color: var(--fg-4);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.transfer-watch-card {
+  position: relative;
+  margin: 4px 16px;
+  padding: 10px 36px 10px 12px;
+  background: var(--bg-3);
+  border: 1px solid var(--line-1);
+  border-radius: 10px;
+}
+.twc-team {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg-1);
+  margin-bottom: 3px;
+}
+.twc-last {
+  font-size: 11px;
+  color: var(--fg-4);
+  line-height: 1.3;
+}
+.transfer-watch-card .stc-del {
+  position: absolute;
+  top: 8px; right: 8px;
+  background: transparent;
+  border: none;
+  color: var(--fg-4);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 4px;
+  -webkit-tap-highlight-color: transparent;
+}
+.transfer-watch-card .stc-del:active { color: var(--err); }
+

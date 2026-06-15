@@ -519,4 +519,85 @@ export class Entertainment {
             return { fmtDate, fmtTime, diff };
         } catch { return { fmtDate: isoStr, fmtTime: '', diff: 0 }; }
     }
+
+    /* ── NOTÍCIAS DE FUTEBOL ────────────────────────── */
+    static async getFootballNews(count = 12) {
+        const ck = 'ent_news_futebol';
+        const hit = scGet(ck, TTL_NEWS);
+        if (hit) return hit;
+        const feeds = [
+            'https://news.google.com/rss/search?q=futebol+Brasil+OR+Flamengo+OR+Palmeiras+OR+Brasileir%C3%A3o+OR+Copa+do+Brasil&hl=pt-BR&gl=BR&ceid=BR:pt-BR',
+            'https://news.google.com/rss/headlines/section/topic/SPORTS?hl=pt-BR&gl=BR&ceid=BR:pt-BR'
+        ];
+        for (const feed of feeds) {
+            const items = await this._fetchRSS(feed, count);
+            const result = items.slice(0, count).map(it => ({
+                title: (it.title || '').replace(/ - [^-]+$/, '').trim(),
+                url: it.link || '#',
+                source: this._extractSource(it),
+                time: it.pubDate ? this._relTime(it.pubDate) : ''
+            })).filter(n => n.title);
+            if (result.length) { scSet(ck, result); return result; }
+        }
+        return [];
+    }
+
+    /* ── NOTÍCIAS DE TRANSFERÊNCIAS ─────────────────── */
+    static async getTransferNews(count = 12) {
+        const ck = 'ent_news_transfer';
+        const hit = scGet(ck, TTL_NEWS);
+        if (hit) return hit;
+        const feed = 'https://news.google.com/rss/search?q=transfer%C3%AAncia+futebol+OR+contrata%C3%A7%C3%A3o+OR+refor%C3%A7o+OR+bomba+transfer&hl=pt-BR&gl=BR&ceid=BR:pt-BR';
+        const items = await this._fetchRSS(feed, count);
+        const result = items.slice(0, count).map(it => ({
+            title: (it.title || '').replace(/ - [^-]+$/, '').trim(),
+            url: it.link || '#',
+            source: this._extractSource(it),
+            time: it.pubDate ? this._relTime(it.pubDate) : ''
+        })).filter(n => n.title);
+        if (result.length) scSet(ck, result);
+        return result;
+    }
+
+    /* ── ALERTAS: busca notícias de transferência para um time ── */
+    static async checkTeamTransferNews(teamName) {
+        if (!teamName) return [];
+        const q = encodeURIComponent(`${teamName} transferência OR contratação OR reforço OR negociação OR assina`);
+        const feed = `https://news.google.com/rss/search?q=${q}&hl=pt-BR&gl=BR&ceid=BR:pt-BR`;
+        const items = await this._fetchRSS(feed, 8);
+        return items.map(it => ({
+            title: (it.title || '').replace(/ - [^-]+$/, '').trim(),
+            url: it.link || '#',
+            source: this._extractSource(it),
+            time: it.pubDate ? this._relTime(it.pubDate) : '',
+            pubDate: it.pubDate || ''
+        })).filter(n => n.title);
+    }
+
+    /* ── ALERTAS: gerenciamento de times monitorados ── */
+    static getTransferWatches() { return Store.get('orbit_transfer_watches', []); }
+    static saveTransferWatches(list) { Store.set('orbit_transfer_watches', list); }
+
+    static addTransferWatch(teamName) {
+        const list = this.getTransferWatches();
+        if (list.find(w => w.team.toLowerCase() === teamName.trim().toLowerCase())) return null;
+        const id = 'tw' + Date.now();
+        list.push({ id, team: teamName.trim(), lastSeen: new Date().toISOString(), lastTitle: '' });
+        this.saveTransferWatches(list);
+        return id;
+    }
+
+    static removeTransferWatch(id) {
+        this.saveTransferWatches(this.getTransferWatches().filter(w => w.id !== id));
+    }
+
+    static updateWatchLastSeen(id, lastTitle) {
+        const list = this.getTransferWatches();
+        const w = list.find(x => x.id === id);
+        if (w) { w.lastSeen = new Date().toISOString(); w.lastTitle = lastTitle; this.saveTransferWatches(list); }
+    }
+
+    /* ── TÓPICOS DE NOTÍCIAS personalizados ─────────── */
+    static getNewsTopics() { return Store.get('orbit_news_topics', ['top', 'sports']); }
+    static saveNewsTopics(topics) { Store.set('orbit_news_topics', topics); }
 }

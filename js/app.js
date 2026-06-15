@@ -241,6 +241,8 @@ class App {
             setTimeout(() => this._requestNotifPermission(), 5000);
             // Agenda notificações do dia
             setTimeout(() => this._scheduleAgendaNotifications(), 2000);
+            // Inicia polling de alertas de transferência
+            setTimeout(() => this._startTransferAlerts(), 10000);
         }, 350);
     }
 
@@ -1909,9 +1911,15 @@ class App {
         this._renderTeamsList();
         Entertainment.getTeams().forEach(t => this._loadTeamGame(t));
 
-        // Notícias
+        // Alertas de transferência
+        this._renderTransferWatches();
+
+        // Notícias — carrega aba ativa
+        this._currentNewsTab = this._currentNewsTab || 'geral';
+        document.querySelectorAll('.news-sub-tab').forEach(b => b.classList.remove('active'));
+        document.getElementById(`ntab-${this._currentNewsTab}`)?.classList.add('active');
         this._renderNewsSkeleton();
-        Entertainment.getTechNews().then(news => this._renderNewsList(news));
+        this._loadNewsForTab(this._currentNewsTab);
 
         // F1
         const f1Next = document.getElementById('f1-next-card');
@@ -2202,12 +2210,37 @@ class App {
     }
 
     reloadNews() {
-        try { sessionStorage.removeItem('ent_news_mix'); sessionStorage.removeItem('ent_news_top'); sessionStorage.removeItem('ent_news_tech'); } catch (_) {}
+        const tab = this._currentNewsTab || 'geral';
+        try {
+            sessionStorage.removeItem('ent_news_mix');
+            sessionStorage.removeItem('ent_news_top');
+            sessionStorage.removeItem('ent_news_tech');
+            sessionStorage.removeItem('ent_news_futebol');
+            sessionStorage.removeItem('ent_news_transfer');
+        } catch (_) {}
         this._renderNewsSkeleton();
-        Entertainment.getTechNews().then(news => this._renderNewsList(news));
+        this._loadNewsForTab(tab);
     }
 
-    _renderNewsList(news) {
+    switchNewsTab(tab) {
+        this._currentNewsTab = tab;
+        document.querySelectorAll('.news-sub-tab').forEach(b => b.classList.remove('active'));
+        document.getElementById(`ntab-${tab}`)?.classList.add('active');
+        this._renderNewsSkeleton();
+        this._loadNewsForTab(tab);
+    }
+
+    _loadNewsForTab(tab) {
+        if (tab === 'futebol') {
+            Entertainment.getFootballNews(12).then(news => this._renderNewsList(news));
+        } else if (tab === 'transfer') {
+            Entertainment.getTransferNews(12).then(news => this._renderNewsList(news, true));
+        } else {
+            Entertainment.getTechNews().then(news => this._renderNewsList(news));
+        }
+    }
+
+    _renderNewsList(news, isTransfer = false) {
         const el = document.getElementById('sport-news-list');
         if (!el) return;
         if (!news.length) {
@@ -2217,11 +2250,216 @@ class App {
         }
         el.innerHTML = news.map(n => {
             const meta = [n.source, n.time].filter(Boolean).join(' · ');
+            const badge = isTransfer ? '<span class="transfer-badge">🔁</span> ' : '';
             return `<a class="news-item" href="${n.url}" target="_blank" rel="noopener">
-                <div class="news-title">${(n.title || '').replace(/</g,'&lt;')}</div>
+                <div class="news-title">${badge}${(n.title || '').replace(/</g,'&lt;')}</div>
                 <div class="news-meta">${meta.replace(/</g,'&lt;')}</div>
             </a>`;
         }).join('');
+    }
+
+    /* ── ALERTAS DE TRANSFERÊNCIA ──────────────────── */
+    _renderTransferWatches() {
+        const el = document.getElementById('transfer-watches-list');
+        if (!el) return;
+        const watches = Entertainment.getTransferWatches();
+        if (!watches.length) {
+            el.innerHTML = '<div style="padding:8px 16px;color:var(--fg-4);font-size:12px">Nenhum time monitorado ainda.</div>';
+            return;
+        }
+        el.innerHTML = watches.map(w => `
+            <div class="transfer-watch-card">
+                <div class="twc-team">⚽ ${(w.team || '').replace(/</g,'&lt;')}</div>
+                <div class="twc-last">${w.lastTitle ? w.lastTitle.slice(0, 60) + '...' : 'Aguardando novidades...'}</div>
+                <button class="stc-del" onclick="orbit.removeTransferWatch('${w.id}')">×</button>
+            </div>
+        `).join('');
+    }
+
+    addTransferWatch() {
+        const inp = document.getElementById('transfer-watch-inp');
+        const name = inp?.value.trim();
+        if (!name) return UI.toast('Digite o nome do time!', 'err');
+        const id = Entertainment.addTransferWatch(name);
+        if (!id) return UI.toast('Time já monitorado!', 'warn');
+        if (inp) inp.value = '';
+        this._renderTransferWatches();
+        UI.toast(`Monitorando ${name}! 🔔`, 'ok');
+        if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
+        this._checkTransferAlerts();
+    }
+
+    removeTransferWatch(id) {
+        Entertainment.removeTransferWatch(id);
+        this._renderTransferWatches();
+        if (navigator.vibrate) navigator.vibrate(30);
+    }
+
+    _startTransferAlerts() {
+        if (this._transferAlertInterval) clearInterval(this._transferAlertInterval);
+        this._transferAlertInterval = setInterval(() => this._checkTransferAlerts(), 15 * 60 * 1000);
+        setTimeout(() => this._checkTransferAlerts(), 8000);
+    }
+
+    async _checkTransferAlerts() {
+        const watches = Entertainment.getTransferWatches();
+        if (!watches.length) return;
+        for (const watch of watches) {
+            try {
+                const news = await Entertainment.checkTeamTransferNews(watch.team);
+                if (!news.length) continue;
+                const latest = news[0];
+                if (!latest.title || latest.title === watch.lastTitle) continue;
+                Entertainment.updateWatchLastSeen(watch.id, latest.title);
+                this._renderTransferWatches();
+                if (Notification.permission === 'granted') {
+                    try {
+                        const sw = await navigator.serviceWorker.ready;
+                        await sw.showNotification(`⚽ ${watch.team} — transferência!`, {
+                            body: latest.title,
+                            icon: './icon-192.png',
+                            badge: './icon-192.png',
+                            tag: `transfer-${watch.id}`,
+                            renotify: true,
+                            vibrate: [200, 100, 200, 100, 200],
+                            data: { url: latest.url }
+                        });
+                    } catch (_) {
+                        new Notification(`⚽ ${watch.team} — transferência!`, {
+                            body: latest.title,
+                            icon: './icon-192.png',
+                            tag: `transfer-${watch.id}`
+                        });
+                    }
+                }
+            } catch (_) {}
+        }
+    }
+
+    /* ── ORBIT PREFERÊNCIAS EVOLUTIVAS ─────────────── */
+    _getOrbitPrefs() {
+        return Store.get('orbit_prefs', { topics: [], lastUpdated: null });
+    }
+
+    _updateOrbitPrefs() {
+        const history = Store.getCurMsgs();
+        if (history.length < 6) return;
+
+        const recentAssistant = history.slice(-16).filter(m => m.role === 'assistant').map(m => (m.content || '').toLowerCase()).join(' ');
+        if (!recentAssistant.length) return;
+
+        const topicMap = {
+            'futebol': ['futebol', 'gol', 'flamengo', 'palmeiras', 'brasileirão', 'campeonato', 'bola', 'artilheiro'],
+            'F1': ['fórmula 1', 'corrida', 'hamilton', 'verstappen', 'pit stop', 'grid', 'circuito'],
+            'música': ['música', 'sertanejo', 'rap', 'playlist', 'beat', 'funk', 'letra'],
+            'estudos': ['cálculo', 'equação', 'integral', 'derivada', 'física', 'estudo', 'prova'],
+            'programação': ['código', 'javascript', 'html', 'css', 'github', 'api', 'pwa', 'deploy'],
+            'finanças': ['dinheiro', 'investimento', 'gasto', 'financeiro', 'poupança', 'renda'],
+            'fé': ['oração', 'deus', 'bíblia', 'versículo', 'cristão', 'jesus', 'graça'],
+            'games': ['ps5', 'jogo', 'game', 'cyberpunk', 'missão', 'platina', 'spider-man'],
+            'mma/boxe': ['ufc', 'luta', 'boxe', 'nocaute', 'ko', 'ring', 'whindersson'],
+            'negócios': ['cliente', 'projeto', 'negócio', 'empresa', 'contrato', 'dax', 'nupieepro'],
+            'design': ['adobe', 'figma', 'layout', 'tipografia', 'arte', 'identidade visual'],
+            'tecnologia': ['inteligência artificial', 'ia', 'chatgpt', 'modelo', 'llm', 'openai']
+        };
+
+        const prefs = this._getOrbitPrefs();
+        const detected = [];
+        for (const [topic, keywords] of Object.entries(topicMap)) {
+            if (keywords.some(kw => recentAssistant.includes(kw))) detected.push(topic);
+        }
+
+        if (!detected.length) return;
+
+        const merged = [...new Set([...(prefs.topics || []), ...detected])].slice(-15);
+        Store.set('orbit_prefs', { topics: merged, lastUpdated: new Date().toISOString() });
+    }
+
+    /* ── SYMBOL PICKER ─────────────────────────────── */
+    _getSymbolCategories() {
+        return [
+            {
+                label: '∫ Cálculo',
+                syms: ['∫', '∬', '∭', '∮', '∂', '∇', 'Δ', 'δ', '∞', '→', '∑', '∏', 'lim', 'dx', 'dy', 'dt', 'du', 'dθ', '∂/∂x', 'd/dx', 'd²/dx²', 'ℝ', 'ℕ', 'ℤ', 'ℚ', 'ℂ', 'ε-δ', 'f\'(x)', 'f\'\'(x)', '|x|']
+            },
+            {
+                label: '≠ Operadores',
+                syms: ['±', '∓', '×', '÷', '≠', '≈', '≡', '≤', '≥', '≪', '≫', '∝', '∴', '∵', '√', '∛', '∜', '⊕', '⊗', '⌊x⌋', '⌈x⌉', '‖v‖', 'ℓ', '∠', '°', '′', '″']
+            },
+            {
+                label: 'α Gregos',
+                syms: ['α', 'β', 'γ', 'δ', 'ε', 'ζ', 'η', 'θ', 'ι', 'κ', 'λ', 'μ', 'ν', 'ξ', 'π', 'ρ', 'σ', 'τ', 'υ', 'φ', 'χ', 'ψ', 'ω', 'Γ', 'Δ', 'Θ', 'Λ', 'Ξ', 'Π', 'Σ', 'Φ', 'Ψ', 'Ω']
+            },
+            {
+                label: '∩ Conjuntos',
+                syms: ['∩', '∪', '⊂', '⊃', '⊆', '⊇', '⊄', '⊉', '∈', '∉', '∅', '\\', '×', 'ℙ(A)', 'card(A)', '#A', '∀', '∃', '∄', '¬', '∧', '∨', '⇒', '⇔', '⊢', '⊨']
+            },
+            {
+                label: 'EDO',
+                syms: ["y'", "y''", "y'''", 'dy/dx', 'd²y/dx²', 'y(0)=', "y'(0)=", 'e^{rx}', 'W(y₁,y₂)', 'y_h', 'y_p', 'y_g', 'λ₁', 'λ₂', 'r²+', 'c₁', 'c₂', 'sen(x)', 'cos(x)', 'e^x', 'cosh(x)', 'sinh(x)', 'P(x)', 'Q(x)', 'μ(x)']
+            },
+            {
+                label: '🔥 Emojis',
+                syms: ['🔥', '💀', '😂', '🤔', '👀', '💡', '🎯', '⚡', '🚀', '🏆', '✅', '❌', '🙏', '😤', '🤝', '🥲', '💪', '🎮', '⚽', '🏎️', '🥊', '😎', '🧠', '💯', '👏', '🫡', '😮', '🔑', '📚', '⚠️', '🎉', '👊', '🤯', '😅', '🫶', '✨']
+            }
+        ];
+    }
+
+    showSymbolPicker() {
+        const existing = document.getElementById('symbol-picker');
+        if (existing) {
+            const isOpen = existing.classList.contains('open');
+            existing.classList.toggle('open', !isOpen);
+            document.getElementById('sym-btn')?.classList.toggle('active', !isOpen);
+            return;
+        }
+        const cats = this._getSymbolCategories();
+        const picker = document.createElement('div');
+        picker.id = 'symbol-picker';
+        picker.className = 'symbol-picker open';
+
+        const tabsHtml = cats.map((c, i) =>
+            `<button class="sym-cat-btn${i === 0 ? ' active' : ''}" onclick="orbit._symCat(${i})">${c.label}</button>`
+        ).join('');
+
+        const pagesHtml = cats.map((c, i) =>
+            `<div class="sym-page${i === 0 ? ' active' : ''}" id="sym-page-${i}">${
+                c.syms.map(s => `<button class="sym-btn" onclick="orbit._insertSymbol(${JSON.stringify(s)})">${s}</button>`).join('')
+            }</div>`
+        ).join('');
+
+        picker.innerHTML = `
+            <div class="sym-cats">${tabsHtml}</div>
+            <div class="sym-grid">${pagesHtml}</div>
+        `;
+
+        const inpArea = document.querySelector('.inp-area');
+        inpArea?.parentNode?.insertBefore(picker, inpArea);
+        document.getElementById('sym-btn')?.classList.add('active');
+    }
+
+    hideSymbolPicker() {
+        const el = document.getElementById('symbol-picker');
+        if (el) el.classList.remove('open');
+        document.getElementById('sym-btn')?.classList.remove('active');
+    }
+
+    _symCat(idx) {
+        document.querySelectorAll('.sym-cat-btn').forEach((b, i) => b.classList.toggle('active', i === idx));
+        document.querySelectorAll('.sym-page').forEach((p, i) => p.classList.toggle('active', i === idx));
+    }
+
+    _insertSymbol(sym) {
+        const inp = document.getElementById('msginput');
+        if (!inp) return;
+        const start = inp.selectionStart ?? inp.value.length;
+        const end = inp.selectionEnd ?? inp.value.length;
+        inp.value = inp.value.slice(0, start) + sym + inp.value.slice(end);
+        const pos = start + sym.length;
+        inp.setSelectionRange(pos, pos);
+        inp.focus();
+        this.handleInput?.();
+        if (navigator.vibrate) navigator.vibrate(15);
     }
 
     _renderPS5() {
@@ -2599,6 +2837,7 @@ class App {
             if (onSameConv()) this._updateConvTitle();
 
             if (history.length % 24 === 0) AI.summarizeSession(history);
+            if (history.length % 8 === 0) this._updateOrbitPrefs();
             this._cacheResponse(text, fullResponse);
             if (result?.provider) this.updateQuota(result.provider);
             if (this._hf && fullResponse && onSameConv()) setTimeout(() => this.speak(fullResponse), 400);
@@ -2988,7 +3227,17 @@ class App {
                 <button class="btn btn-primary" onclick="orbit.saveNuc()">SALVAR NÚCLEO</button></div>
                 <div class="psec"><label class="plabel">Memórias Episódicas (${ep.length})</label>
                 <div>${ep.length ? ep.map(e => `<div class="ctx-item"><strong style="font-size:11px;color:var(--text-sec)">${e.d||''}:</strong> ${e.s}</div>`).join('') : '<p style="color:var(--text-muted);font-size:13px">Nenhuma memória.</p>'}</div></div>
-                <button class="btn btn-danger" onclick="orbit.clearMem()">LIMPAR MEMÓRIAS</button>`;
+                <button class="btn btn-danger" onclick="orbit.clearMem()">LIMPAR MEMÓRIAS</button>
+                ${(() => {
+                    const prefs = this._getOrbitPrefs();
+                    if (!prefs?.topics?.length) return '';
+                    return `<div class="psec" style="margin-top:16px"><label class="plabel">🌟 Gostos que a Orbit desenvolveu</label>
+                    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+                        ${prefs.topics.map(t => `<span style="background:var(--bg-3);border:1px solid var(--line-2);border-radius:var(--r-pill);padding:4px 10px;font-size:11px;color:var(--fg-2)">${t}</span>`).join('')}
+                    </div>
+                    <p style="font-size:10px;color:var(--fg-4);margin-top:8px">Atualizado em ${prefs.lastUpdated ? new Date(prefs.lastUpdated).toLocaleDateString('pt-BR') : '—'}</p>
+                    <button class="btn btn-ghost" style="margin-top:6px;font-size:11px;padding:6px 12px" onclick="localStorage.removeItem('orbit_prefs');orbit.renderPanelTab('ai');UI.toast('Preferências resetadas','ok')">RESETAR GOSTOS</button></div>`;
+                })()}`;
         } else if (tab === 'disc') {
             const d = University.get();
             body.innerHTML = `
@@ -3303,6 +3552,11 @@ class App {
             const pal = document.getElementById('cmd-palette');
             const textarea = document.getElementById('msginput');
             if (pal && pal.style.display !== 'none' && !pal.contains(e.target) && e.target !== textarea) this.hideCmdPalette();
+            const picker = document.getElementById('symbol-picker');
+            const symBtn = document.getElementById('sym-btn');
+            if (picker && picker.classList.contains('open') && !picker.contains(e.target) && e.target !== symBtn && !symBtn?.contains(e.target)) {
+                this.hideSymbolPicker();
+            }
         });
 
         // Botão de hardware "voltar" no Android fecha chat/painel/modal aberto

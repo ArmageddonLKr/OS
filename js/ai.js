@@ -154,6 +154,11 @@ export class AI {
         const wCtx = this._weatherCtx();
         if (wCtx) contextExtra += wCtx;
 
+        const orbitPrefs = Store.get('orbit_prefs', null);
+        if (orbitPrefs?.topics?.length) {
+            contextExtra += `\n\n## ORBIT CURTE (gostos que foram surgindo)\n${orbitPrefs.topics.slice(-10).join(', ')}.`;
+        }
+
         const sys = c.prompt || DEFAULT_PROMPT;
         return `${sys}\n\nCONTEXTO:\nAGORA: ${dtBR}\nTOM: ${tone}${sundayNote}${this.absenceNote()}${this._stressHint}\n\n${Store.getNuc()}${epBlock}${this.agendaContext()}${contextExtra}`;
     }
