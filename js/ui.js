@@ -11,17 +11,27 @@ export const Icons = {
 };
 
 export class UI {
-    static toast(m, t) {
+    static _toastTimer = null;
+
+    static toast(m, t = 'info', duration = 3200) {
         const el = document.getElementById('toast');
         if (!el) return;
-        el.textContent = m;
-        el.className = `toast ${t || ''} show`;
-        setTimeout(() => el.classList.remove('show'), 3000);
+        const icons = { ok: '✓', err: '✕', warn: '⚠', info: '' };
+        const icon = icons[t] || '';
+        el.innerHTML = icon ? `<span class="toast-icon">${icon}</span><span>${m}</span>` : `<span>${m}</span>`;
+        el.className = `toast ${t} show`;
+        if (this._toastTimer) clearTimeout(this._toastTimer);
+        this._toastTimer = setTimeout(() => {
+            el.classList.remove('show');
+            this._toastTimer = null;
+        }, duration);
     }
 
-    static setStatus(s) {
+    static setStatus(s, cls = '') {
         const el = document.getElementById('hdr-st');
-        if (el) el.textContent = s;
+        if (!el) return;
+        el.textContent = s;
+        el.className = cls;
     }
 
     static addMsg(role, text, isStatic = false, image = null) {
@@ -146,6 +156,45 @@ export class UI {
     static removeThinking() {
         const th = document.getElementById('thinking');
         if (th) th.remove();
+    }
+
+    /* Gera HTML de skeleton para estados de carregamento */
+    static skeleton(lines = [80, 60, 40]) {
+        return lines.map(w =>
+            `<div class="skeleton skeleton-line" style="width:${w}%"></div>`
+        ).join('');
+    }
+
+    /* Skeleton para card de seção */
+    static skeletonCard(rows = 3) {
+        return `<div class="skeleton-card">
+            ${Array.from({ length: rows }, (_, i) => `
+                <div class="skeleton skeleton-line ${i === 0 ? 'lg' : ''}" style="width:${[80,60,40,70][i%4]}%"></div>
+            `).join('')}
+        </div>`;
+    }
+
+    /* Estado de erro de API com botão de retry */
+    static apiError(msg, onRetry) {
+        const id = `err-${Date.now()}`;
+        const html = `<div class="api-error">
+            <div class="api-error-icon">⚡</div>
+            <div class="api-error-title">Algo deu errado</div>
+            <div class="api-error-msg">${msg}</div>
+            ${onRetry ? `<button class="api-error-retry" id="${id}">Tentar de novo</button>` : ''}
+        </div>`;
+        if (onRetry) {
+            setTimeout(() => document.getElementById(id)?.addEventListener('click', onRetry), 0);
+        }
+        return html;
+    }
+
+    /* Spinner de carregamento inline */
+    static loading(msg = 'Carregando...') {
+        return `<div class="api-loading">
+            <div class="api-loading-spinner"></div>
+            <span>${msg}</span>
+        </div>`;
     }
 }
 
