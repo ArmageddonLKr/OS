@@ -48,11 +48,13 @@ export class UI {
             ? `<img src="data:${image.type};base64,${image.data}" class="msg-img">`
             : '';
 
+        const time = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
         row.innerHTML = `
             <div class="msg-av">${role === 'user' ? Icons.user : Icons.orb}</div>
             <div class="mbubble">
                 ${imgHtml}
                 <div class="m-content">${isStatic ? '' : this.renderMd(text)}</div>
+                <span class="msg-time">${time}</span>
             </div>
         `;
 
@@ -145,6 +147,21 @@ export class UI {
         });
 
         return t;
+    }
+
+    /* Anima um valor numérico de 0 até o alvo, usando formatFn pra exibir (ex: moeda BR) */
+    static countUp(el, target, duration = 600, formatFn = (v) => Math.round(v).toString()) {
+        if (!el) return;
+        const start = Date.now();
+        const step = () => {
+            const elapsed = Date.now() - start;
+            const progress = Math.min(elapsed / duration, 1);
+            const ease = 1 - Math.pow(1 - progress, 3);
+            const current = target * ease;
+            el.textContent = formatFn(current);
+            if (progress < 1) requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
     }
 
     static copyCode(btn) {

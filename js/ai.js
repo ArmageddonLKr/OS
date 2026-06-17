@@ -76,6 +76,7 @@ export class AI {
             finance: /\b(dinheiro|gasto|gastos|despesa|saldo|renda|sal[aá]rio|pagamento|d[ií]vida|custo|finan[cç]|budget|or[cç]amento)\b/.test(txt),
             health: /\b(h[aá]bito|treino|exerc[ií]cio|[aá]gua|sono|dormir|acordar|cansado|energia|sa[uú]de|peso|imc)\b/.test(txt),
             project: /\b(dax|nupieepro|projeto|freelance|cliente|site|design|entrega|prazo|orbit|kanban)\b/.test(txt),
+            sports: /\b(time|jogo|jogou|partida|campeonato|tabela|classifica[çc][aã]o|placar|futebol)\b/.test(txt),
         };
     }
 
@@ -125,6 +126,45 @@ export class AI {
         } catch (_) { return ''; }
     }
 
+    /* Contexto dos times acompanhados — só lê cache de sessão já buscado pela tela de Esportes */
+    static _sportsCtx() {
+        try {
+            const teams = Store.get('orbit_teams', []);
+            if (!teams.length) return '';
+            let ctx = '\n\n## MEUS TIMES\n';
+            let any = false;
+            teams.forEach(t => {
+                const next = sessionStorage.getItem(`ent_next_${t.espnId}`);
+                const results = sessionStorage.getItem(`ent_last_${t.espnId}`);
+                const standing = sessionStorage.getItem(`ent_stand_${t.espnId}`);
+                let block = `\n**${t.name}**\n`;
+                let hasData = false;
+                if (standing) {
+                    try {
+                        const s = JSON.parse(standing).data;
+                        block += `- Posição: ${s.pos}º, ${s.pts} pts (${s.wins}V ${s.draws}E ${s.losses}D)\n`;
+                        hasData = true;
+                    } catch (_) {}
+                }
+                if (results) {
+                    try {
+                        const r = JSON.parse(results).data;
+                        if (r.length) { block += `- Últimos jogos: ${r.map(x => x.result).join('')}\n`; hasData = true; }
+                    } catch (_) {}
+                }
+                if (next) {
+                    try {
+                        const n = JSON.parse(next).data;
+                        block += `- Próximo jogo: ${n.home} × ${n.away}\n`;
+                        hasData = true;
+                    } catch (_) {}
+                }
+                if (hasData) { ctx += block; any = true; }
+            });
+            return any ? ctx : '';
+        } catch (_) { return ''; }
+    }
+
     static buildSys(msgs = []) {
         const c = Store.getCfg();
         const now = this.nowBR();
@@ -151,6 +191,7 @@ export class AI {
         if (topics.finance) contextExtra += this._financeCtx();
         if (topics.health) contextExtra += this._habitsCtx();
         if (topics.project) contextExtra += this._projectCtx();
+        if (topics.sports) contextExtra += this._sportsCtx();
         const wCtx = this._weatherCtx();
         if (wCtx) contextExtra += wCtx;
 
@@ -213,6 +254,20 @@ export class AI {
             }))
         ];
 
+        const model = c.groqModel || GROQ_MODEL;
+        const isCompound = model === 'compound-beta';
+        const body = {
+            model,
+            messages,
+            stream: true,
+            temperature: 0.85,
+            max_tokens: payload.max_tokens || this._autoMaxTokens(payload.messages)
+        };
+        if (isCompound) {
+            body.tools = [{ type: 'web_search' }];
+            body.tool_choice = 'auto';
+        }
+
         const res = await fetch(GROQ_URL, {
             method: 'POST',
             signal,
@@ -220,13 +275,7 @@ export class AI {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${c.groqKey}`
             },
-            body: JSON.stringify({
-                model: c.groqModel || GROQ_MODEL,
-                messages,
-                stream: true,
-                temperature: 0.85,
-                max_tokens: payload.max_tokens || this._autoMaxTokens(payload.messages)
-            })
+            body: JSON.stringify(body)
         });
 
         if (!res.ok) {
@@ -382,6 +431,12 @@ export class AI {
         if (/\b(placar|quem ganhou|quem venceu|resultado d|que horas (é|e|começa|comeca)|quando (é|e|sai|vai sair|lança|lanca|estreia)|lançamento|lancamento)\w*/.test(t)) return true;
         // "quem é / o que é" sobre algo recente
         if (/\b(quem (é|e|foi)|o que (é|e|foi|houve|aconteceu))\b/.test(t) && /\b(202[4-9]|hoje|recent|agora|atual)\w*/.test(t)) return true;
+        // Times e esportes (jogo, tabela, transferência)
+        if (/\b(jog(ou|aram|ando)|partida|campeonato|tabela|classifica[çc][aã]o|gol(s)?|escala[çc][aã]o|elenco|contrat(ou|aram)|reforç|reforc|transferênci|transferenc)\w*/.test(t)) return true;
+        // Clima e previsão perguntado via chat
+        if (/\b(chuva|vai chover|previsão do tempo|previsao do tempo|temperatura (hoje|agora|de))\w*/.test(t)) return true;
+        // Tecnologia / lançamentos recentes
+        if (/\b(lançou|lancou|saiu (o|a)|disponível|disponivel|novo (modelo|app|jogo|filme|série|serie|iphone|celular)|atualiz(ou|ação|acao))\w*/.test(t)) return true;
         // Pergunta factual sobre o mundo (gate: pergunta + sem referência pessoal/app)
         const isQuestion = text.includes('?') || /^\s*(qual|quais|quando|onde|quanto|quantos|quem|o que|por que|porque|como)\b/.test(t);
         const isPersonal = /\b(você|voce|vc|tu |teu|tua|contigo|comigo|a gente|orbit|sophy|lembra|meu |minha |minhas |meus |me ajuda|me da|me dá|tô |to |tava|cê|acha que|sua opinião|sua opiniao)\b/.test(t);

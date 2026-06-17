@@ -49,7 +49,7 @@
 .cal-day.selected .cal-day-num { color: var(--bg-0); }
 .cal-day.other-month .cal-day-num { color: var(--fg-5); }
 .cal-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--gold); margin-top: 2px; }
-.cal-day.selected .cal-dot { background: var(--bg-0); }
+.cal-day.selected .cal-dots-row .cal-dot { background: var(--bg-0); }
 
 .agenda-day-hdr { padding: 12px 16px 6px; font-family: var(--fm); font-size: 10px; letter-spacing: .16em; color: var(--fg-4); text-transform: uppercase; border-top: 1px solid var(--line-1); }
 .agenda-day-events { padding: 0 14px 120px; }
@@ -275,6 +275,16 @@
 .stcg-score { color: var(--gold); font-family: var(--fm); }
 .stcg-info { font-size: 11px; color: var(--fg-4); margin-top: 2px; font-family: var(--fm); }
 
+.stc-chips-row { display: flex; gap: 5px; padding-left: 24px; margin-bottom: 8px; }
+.stc-chip { width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; font-family: var(--fm); }
+.chip-win  { background: rgba(74,208,138,0.18); color: #4ad08a; border: 1px solid rgba(74,208,138,0.3); }
+.chip-draw { background: rgba(255,255,255,0.07); color: var(--fg-3); border: 1px solid var(--line-2); }
+.chip-loss { background: rgba(255,90,90,0.18); color: #ff6b6b; border: 1px solid rgba(255,90,90,0.3); }
+.stc-standing-row { display: flex; align-items: center; gap: 10px; padding: 6px 0 0 24px; margin-top: 4px; border-top: 1px solid var(--line-1); font-size: 11px; color: var(--fg-3); }
+.stc-pos { font-weight: 700; color: var(--gold); font-size: 13px; }
+.stc-pts { font-weight: 600; color: var(--fg-2); }
+.stc-wdl { color: var(--fg-4); }
+
 /* Lutadores (Boxe / MMA) */
 .fighter-card { margin: 0 14px 8px; background: var(--bg-2); border: 1px solid var(--line-1); border-radius: var(--r-md); padding: 12px 14px; }
 .fc-hdr { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
@@ -475,5 +485,161 @@ button:focus-visible, a:focus-visible {
   outline: 2px solid rgba(255,255,255,.5);
   outline-offset: 3px;
 }
+
+/* ── HEATMAP DE HÁBITOS (estilo GitHub) ── */
+.heatmap-grid { display: grid; gap: 2px; padding: 8px 8px 0; }
+.hm-cell { aspect-ratio: 1; border-radius: 2px; background: rgba(255,255,255,0.07); }
+.hm-i0 { background: rgba(255,255,255,0.06); }
+.hm-i1 { background: rgba(212,175,55,0.25); }
+.hm-i2 { background: rgba(212,175,55,0.45); }
+.hm-i3 { background: rgba(212,175,55,0.70); }
+.hm-i4 { background: rgba(212,175,55,0.95); }
+.hm-legend { display: flex; align-items: center; gap: 3px; padding: 8px 8px 0; justify-content: flex-end; }
+.hm-legend .hm-cell { width: 10px; height: 10px; }
+
+/* ── CALENDÁRIO: pontos por categoria ── */
+.cal-dots-row { display: flex; gap: 2px; justify-content: center; margin-top: 2px; }
+.cal-dots-row .cal-dot { width: 4px; height: 4px; border-radius: 50%; }
+
+/* ── FINANÇAS: bar chart mensal ── */
+.fin-bar-chart-wrap { padding: 4px 14px 8px; }
+
+/* ── PARETO ── */
+.pareto-section { background: var(--bg-2); border-radius: 14px; border: 1px solid var(--line-1); margin: 0 14px 14px; overflow: hidden; }
+.pareto-hdr { padding: 12px 14px 6px; display: flex; flex-direction: column; }
+.pareto-title { display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: var(--fg-2); text-transform: uppercase; }
+.pareto-sub { display: block; font-size: 10px; color: var(--fg-4); margin-top: 2px; }
+.pareto-insight { font-size: 11px; color: var(--fg-3); padding: 8px 14px 12px; line-height: 1.5; }
+.pi-highlight { color: var(--gold); font-weight: 700; }
+
+/* ── QUICK ACTIONS DASHBOARD ── */
+.dash-quick-actions { display: flex; gap: 8px; padding: 0 16px 4px; overflow-x: auto; scrollbar-width: none; }
+.dash-quick-actions::-webkit-scrollbar { display: none; }
+.dqa-btn { display: flex; flex-direction: column; align-items: center; gap: 4px; background: var(--bg-2); border: 1px solid var(--line-1); border-radius: 12px; padding: 10px 14px; min-width: 56px; cursor: pointer; transition: background .15s, transform .1s; flex-shrink: 0; -webkit-tap-highlight-color: transparent; }
+.dqa-btn:active { transform: scale(.94); background: var(--bg-3); }
+.dqa-icon { font-size: 18px; line-height: 1; }
+.dqa-label { font-size: 9px; font-weight: 600; letter-spacing: .05em; color: var(--fg-3); text-transform: uppercase; }
+
+/* ── RESUMO DO DIA ── */
+.dash-daily-brief { display: flex; align-items: center; gap: 12px; width: calc(100% - 28px); margin: 0 14px 8px; padding: 12px 14px; background: linear-gradient(135deg, rgba(212,175,55,0.08), transparent); border: 1px solid rgba(212,175,55,0.18); border-radius: 14px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.dash-daily-brief > span:first-child { font-size: 20px; }
+.ddb-text { flex: 1; text-align: left; }
+.ddb-title { font-size: 13px; font-weight: 700; color: var(--fg-1); }
+.ddb-sub { font-size: 11px; color: var(--fg-4); margin-top: 1px; }
+.dash-daily-brief svg { color: var(--fg-4); flex-shrink: 0; }
+
+/* ── STREAK DE USO ── */
+.dash-streak { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--gold); font-weight: 600; margin-top: 4px; }
+
+/* ── HUMOR NO HEADER DO CHAT ── */
+.hdr-mood-badge { font-size: 14px; cursor: default; margin-left: 4px; }
+.hdr-mood-badge.pulse { animation: moodPulse 2s ease-in-out infinite; }
+@keyframes moodPulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+
+/* ── TIMESTAMP NOS BALÕES ── */
+.msg-time { font-size: 9px; color: rgba(255,255,255,0.2); display: block; margin-top: 4px; text-align: right; opacity: 0; transition: opacity .2s; }
+.msg-row:hover .msg-time, .msg-row:active .msg-time { opacity: 1; }
+
+/* ── TYPING INDICATOR ORGÂNICO ── */
+.typing-dots { display: flex; gap: 4px; padding: 4px 0; }
+.typing-dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--gold); opacity: .4; animation: typingBounce 1.2s ease-in-out infinite; }
+.typing-dots span:nth-child(2) { animation-delay: .2s; }
+.typing-dots span:nth-child(3) { animation-delay: .4s; }
+@keyframes typingBounce { 0%,60%,100% { transform: translateY(0); opacity: .4; } 30% { transform: translateY(-6px); opacity: 1; } }
+
+/* ── CONTADOR DE CARACTERES ── */
+.char-indicator { position: absolute; bottom: calc(100% + 4px); right: 16px; display: flex; align-items: center; gap: 6px; pointer-events: none; }
+#char-count { font-size: 10px; font-weight: 700; font-family: var(--fm); color: var(--fg-4); min-width: 24px; text-align: right; transition: color .2s; }
+.char-bar-wrap { width: 40px; height: 2px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; }
+.char-bar { height: 100%; width: 0%; border-radius: 2px; transition: width .15s ease, background .3s ease; }
+.inp-area { position: relative; }
+.inp-mode-tag { position: absolute; bottom: calc(100% + 4px); left: 16px; font-size: 10px; color: rgba(74,208,138,0.8); padding: 2px 8px; font-weight: 600; background: rgba(20,20,24,0.85); border-radius: 6px; pointer-events: none; white-space: nowrap; }
+
+/* ── RIPPLE EFFECT ── */
+.ripple-fx { position: absolute; border-radius: 50%; pointer-events: none; background: rgba(255,255,255,0.12); animation: rippleFx .5s ease-out forwards; transform: scale(0); z-index: 0; }
+@keyframes rippleFx { to { transform: scale(1); opacity: 0; } }
+.btn, .nav-btn, .dqa-btn, .mf-btn, .ml-btn, .inp-btn { position: relative; overflow: hidden; }
+
+/* ── PULL TO REFRESH ── */
+.ptr-indicator { overflow: hidden; height: 0; opacity: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--fg-4); font-weight: 600; letter-spacing: .08em; transition: height .1s, opacity .1s; }
+
+/* ── BUSCA GLOBAL ── */
+.search-result-item { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line-1); cursor: pointer; transition: opacity .15s; }
+.search-result-item:active { opacity: .6; }
+.sri-icon { font-size: 18px; flex-shrink: 0; }
+.sri-label { font-size: 13px; color: var(--fg-1); font-weight: 500; }
+.sri-sub { font-size: 11px; color: var(--fg-4); margin-top: 1px; }
+
+/* ── MODO FOCO ── */
+.dash-focus-btn { width: 34px; height: 34px; border-radius: 10px; background: var(--bg-2); border: 1px solid var(--line-1); color: var(--fg-3); display: flex; align-items: center; justify-content: center; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.focus-mode #dash-cambio-card { display: none; }
+.focus-mode #dash-sports-content { display: none; }
+.focus-mode .dash-quick-actions { display: none; }
+.focus-mode .dash-greet { border-color: rgba(212,175,55,0.2); background: linear-gradient(135deg, rgba(212,175,55,0.08), transparent); }
+
+/* ════════════════════════════════════════
+   MERCADO DE TRANSFERÊNCIAS (EA FC style)
+   ════════════════════════════════════════ */
+.mercado-filters { display: flex; gap: 8px; padding: 12px 14px 6px; }
+.mf-btn { flex: 1; padding: 9px 12px; border-radius: 10px; font-size: 12px; font-weight: 700; letter-spacing: .04em; background: var(--bg-2); border: 1px solid var(--line-1); color: var(--fg-3); cursor: pointer; transition: all .15s ease; -webkit-tap-highlight-color: transparent; }
+.mf-btn.active { background: rgba(212,175,55,0.15); border-color: rgba(212,175,55,0.4); color: var(--gold); }
+
+.mercado-leagues { display: flex; gap: 6px; padding: 6px 14px; overflow-x: auto; scrollbar-width: none; }
+.mercado-leagues::-webkit-scrollbar { display: none; }
+.ml-btn { white-space: nowrap; padding: 5px 11px; border-radius: var(--r-pill); font-size: 11px; font-weight: 600; background: var(--bg-3); border: 1px solid var(--line-1); color: var(--fg-4); cursor: pointer; flex-shrink: 0; transition: all .15s; }
+.ml-btn.active { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.25); color: var(--fg-1); }
+
+.mercado-sort-row { display: flex; align-items: center; gap: 6px; padding: 8px 14px 4px; }
+.mercado-sort-label { font-size: 10px; font-weight: 700; letter-spacing: .1em; color: var(--fg-4); text-transform: uppercase; }
+.ms-btn { padding: 4px 10px; border-radius: 6px; font-size: 10px; font-weight: 700; background: transparent; border: 1px solid var(--line-1); color: var(--fg-4); cursor: pointer; transition: all .15s; }
+.ms-btn.active { color: var(--gold); border-color: rgba(212,175,55,0.4); }
+
+.mercado-table-hdr { display: grid; grid-template-columns: 44px 1fr 1fr 72px; padding: 6px 14px; font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-4); border-bottom: 1px solid var(--line-1); }
+
+.mercado-list { padding: 0 0 80px; }
+.mercado-card { display: grid; grid-template-columns: 44px 1fr 1fr 72px; align-items: center; padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,0.04); cursor: pointer; transition: background .15s; gap: 6px; -webkit-tap-highlight-color: transparent; }
+.mercado-card:hover, .mercado-card.selected { background: rgba(255,255,255,0.04); }
+.mercado-card:active { background: rgba(255,255,255,0.07); }
+
+.mc-date { font-size: 10px; font-weight: 700; color: var(--fg-4); text-align: center; line-height: 1.2; }
+.mc-date span { display: block; font-size: 9px; color: var(--fg-5,var(--fg-4)); }
+
+.mc-player { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mc-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--bg-3); border: 1px solid var(--line-1); overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+.mc-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.mc-name-wrap { min-width: 0; }
+.mc-first { font-size: 9px; color: var(--fg-4); }
+.mc-last { font-size: 13px; font-weight: 700; color: var(--fg-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mc-pos { font-size: 9px; color: var(--fg-4); display: flex; align-items: center; gap: 3px; }
+.mc-flag { font-size: 10px; }
+
+.mc-clubs { display: flex; align-items: center; gap: 6px; }
+.mc-crest { width: 22px; height: 22px; flex-shrink: 0; object-fit: contain; border-radius: 3px; background: rgba(255,255,255,0.05); }
+.mc-crest-ph { width: 22px; height: 22px; flex-shrink: 0; background: var(--bg-3); border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 9px; }
+.mc-arrow { font-size: 11px; color: var(--fg-4); flex-shrink: 0; }
+
+.mc-fee { text-align: right; font-size: 12px; font-weight: 700; color: var(--gold); }
+.mc-fee.free { color: var(--ok); font-size: 10px; }
+.mc-fee.loan { color: #4a9eff; font-size: 10px; }
+.mc-fee.unknown { color: var(--fg-4); font-size: 11px; }
+
+.mercado-sk-row { display: grid; grid-template-columns: 44px 1fr 1fr 72px; align-items: center; gap: 6px; padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+.mercado-sk-circle { width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,0.07); animation: skeletonShimmer 1.6s infinite linear; }
+.mercado-sk-line { height: 11px; border-radius: 4px; background: rgba(255,255,255,0.07); animation: skeletonShimmer 1.6s infinite linear; }
+
+.mercado-detail { position: fixed; inset: 0; z-index: 400; background: rgba(0,0,0,0.85); display: flex; align-items: flex-end; }
+.mercado-detail-content { background: var(--bg-2); border-radius: 20px 20px 0 0; padding: 24px 20px 32px; width: 100%; max-height: 70vh; overflow-y: auto; animation: slideUpMercado .3s cubic-bezier(.34,1.56,.64,1); }
+@keyframes slideUpMercado { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.md-player-row { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
+.md-avatar-lg { width: 56px; height: 56px; border-radius: 50%; background: var(--bg-3); border: 2px solid var(--line-2); display: flex; align-items: center; justify-content: center; font-size: 22px; overflow: hidden; }
+.md-player-info h3 { font-size: 18px; font-weight: 700; color: var(--fg-1); margin: 0 0 2px; }
+.md-player-info p { font-size: 12px; color: var(--fg-4); margin: 0; }
+.md-transfer-visual { display: flex; align-items: center; gap: 14px; background: var(--bg-3); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+.md-club { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
+.md-club-crest { width: 40px; height: 40px; object-fit: contain; }
+.md-club-name { font-size: 11px; font-weight: 600; color: var(--fg-2); }
+.md-arrow-big { font-size: 22px; color: var(--fg-3); }
+.md-fee-big { font-size: 28px; font-weight: 700; color: var(--gold); text-align: center; margin: 12px 0 4px; }
+.md-fee-label { font-size: 10px; font-weight: 700; letter-spacing: .12em; color: var(--fg-4); text-align: center; text-transform: uppercase; }
 
 .hdr-conv-title { font-size: 11px; color: var(--fg-4); margin-left: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; display: inline-block; vertical-align: middle; }

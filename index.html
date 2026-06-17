@@ -13,7 +13,6 @@
     <title>OS</title>
 
     <link rel="preconnect" href="https://cdn.jsdelivr.net">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource-variable/geist@5.1.0/index.css">
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/modules.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.10.0/styles/github-dark.min.css">
@@ -26,6 +25,26 @@
 <body>
 
 <div id="aurora-bg"><div class="aurora-orb a1"></div><div class="aurora-orb a2"></div><div class="aurora-orb a3"></div></div>
+
+<!-- ── LOADER GLOBAL ───────────────────────────────────────────── -->
+<div id="os-loader" class="os-loader" style="display:none">
+    <div class="osl-inner">
+        <div class="osl-icon">
+            <svg viewBox="0 0 512 512" width="56" height="56" aria-hidden="true">
+                <g fill="#fff" stroke="#fff" stroke-width="2" stroke-linejoin="round">
+                    <circle cx="256" cy="92" r="33" fill="none" stroke-width="22"/>
+                    <path d="M242 122 L270 122 L266 392 L246 392 Z"/>
+                    <path d="M120 196 L168 176 Q256 152 344 176 L392 196 L344 206 Q256 184 168 206 Z"/>
+                    <path d="M92 246 C 96 358 168 452 256 452 C 344 452 416 358 420 246 C 404 316 366 350 324 364 C 302 372 280 376 256 376 C 232 376 210 372 188 364 C 146 350 108 316 92 246 Z"/>
+                    <path d="M236 440 L256 488 L276 440 Z"/>
+                </g>
+            </svg>
+        </div>
+        <div class="osl-title" id="osl-title">Carregando...</div>
+        <div class="osl-steps" id="osl-steps"></div>
+        <div class="osl-bar-wrap"><div class="osl-bar" id="osl-bar"></div></div>
+    </div>
+</div>
 
 <!-- ── PIN SCREEN ──────────────────────────────────────────────── -->
 <section id="pinscreen" class="screen">
@@ -70,12 +89,23 @@
                     <div class="dash-greet-text">
                         <div id="greet-line" class="greet-line">Bom dia, Pai</div>
                         <div id="greet-sub" class="greet-sub">Carregando...</div>
+                        <div class="dash-streak" id="dash-streak" style="display:none">🔥 <span id="streak-count">0</span> dias seguidos</div>
                     </div>
-                    <div id="greet-weather" class="greet-weather">
-                        <div id="weather-icon" class="weather-icon">☀️</div>
-                        <div class="weather-info">
-                            <div id="weather-temp" class="weather-temp">--°</div>
-                            <div id="weather-desc" class="weather-desc">Teresina</div>
+                    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+                        <div style="display:flex;gap:6px">
+                            <button class="dash-focus-btn" onclick="orbit.openAppSearch()" title="Buscar no app">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                            </button>
+                            <button class="dash-focus-btn" id="dash-focus-btn" onclick="orbit.toggleFocusMode()" title="Modo foco">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+                            </button>
+                        </div>
+                        <div id="greet-weather" class="greet-weather">
+                            <div id="weather-icon" class="weather-icon">☀️</div>
+                            <div class="weather-info">
+                                <div id="weather-temp" class="weather-temp">--°</div>
+                                <div id="weather-desc" class="weather-desc">Teresina</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -87,6 +117,38 @@
                         <div class="dcb-hint" id="dcb-hint">Falar com a Orbit...</div>
                     </div>
                     <svg class="dcb-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+                </button>
+
+                <div class="dash-quick-actions">
+                    <button class="dqa-btn" onclick="orbit.openEvtModal()">
+                        <span class="dqa-icon">📅</span>
+                        <span class="dqa-label">Evento</span>
+                    </button>
+                    <button class="dqa-btn" onclick="orbit.openTxModal()">
+                        <span class="dqa-icon">💰</span>
+                        <span class="dqa-label">Gasto</span>
+                    </button>
+                    <button class="dqa-btn" onclick="orbit.switchTab('hub');setTimeout(()=>orbit.switchHub('habitos'),200)">
+                        <span class="dqa-icon">✅</span>
+                        <span class="dqa-label">Hábito</span>
+                    </button>
+                    <button class="dqa-btn" onclick="orbit.switchTab('academia');setTimeout(()=>orbit.switchAcad('pomo'),200)">
+                        <span class="dqa-icon">⏱️</span>
+                        <span class="dqa-label">Pomo</span>
+                    </button>
+                    <button class="dqa-btn" onclick="orbit.openChat()">
+                        <span class="dqa-icon">💬</span>
+                        <span class="dqa-label">Chat</span>
+                    </button>
+                </div>
+
+                <button class="dash-daily-brief" onclick="orbit.getDailyBrief()">
+                    <span>📋</span>
+                    <div class="ddb-text">
+                        <div class="ddb-title">Resumo do dia</div>
+                        <div class="ddb-sub">A Sophy prepara um briefing pra você</div>
+                    </div>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
                 </button>
 
                 <div class="dash-card">
@@ -156,7 +218,7 @@
                 <button class="hdr-btn" onclick="orbit.closeChat()" title="Voltar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></button>
                 <div class="hdr-info">
                     <div class="hdr-name" id="hdr-name">OS</div>
-                    <div class="hdr-status"><span class="status-dot"></span><span id="hdr-st">online</span><span id="mode-badge"></span> <span id="hdr-conv-title" class="hdr-conv-title"></span></div>
+                    <div class="hdr-status"><span class="status-dot"></span><span id="hdr-st">online</span><span id="mode-badge"></span><span id="hdr-mood-badge" class="hdr-mood-badge" style="display:none"></span> <span id="hdr-conv-title" class="hdr-conv-title"></span></div>
                 </div>
                 <button class="hdr-btn" id="btn-convs" onclick="orbit.openConvList()" title="Conversas"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="13" y2="13"/></svg></button>
                 <button class="hdr-btn" id="btn-search" onclick="orbit.openSearch()" title="Buscar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></button>
@@ -185,9 +247,15 @@
                 <button class="cmd-item" onclick="orbit.runCmd('esquece')"><span class="cmd-icon">🗑️</span><div class="cmd-info"><div class="cmd-name">/esquece</div><div class="cmd-desc">Limpar histórico da sessão</div></div></button>
                 <button class="cmd-item" onclick="orbit.runCmd('pinned')"><span class="cmd-icon">📌</span><div class="cmd-info"><div class="cmd-name">/fixados</div><div class="cmd-desc">Ver mensagens fixadas</div></div></button>
                 <button class="cmd-item" onclick="orbit.runCmd('exportar')"><span class="cmd-icon">💾</span><div class="cmd-info"><div class="cmd-name">/exportar</div><div class="cmd-desc">Exportar conversa</div></div></button>
+                <button class="cmd-item" onclick="orbit.runCmd('diag')"><span class="cmd-icon">🔍</span><div class="cmd-info"><div class="cmd-name">/diagnóstico</div><div class="cmd-desc">Relatório completo de saúde do app</div></div></button>
             </div>
             <div id="attach-bar" class="attach-bar" style="display:none"></div>
             <div class="inp-area">
+                <div id="char-indicator" class="char-indicator" style="display:none">
+                    <span id="char-count">0</span>
+                    <div id="char-bar-wrap" class="char-bar-wrap"><div id="char-bar" class="char-bar"></div></div>
+                </div>
+                <div id="inp-mode-tag" class="inp-mode-tag" style="display:none"></div>
                 <button class="inp-btn" onclick="document.getElementById('file-inp').click()" title="Anexar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></button>
                 <button class="inp-btn" onclick="document.getElementById('cam-inp').click()" title="Câmera"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></button>
                 <input type="file" id="cam-inp" hidden accept="image/*" capture="environment">
@@ -257,6 +325,15 @@
                     <button class="btn btn-primary" onclick="orbit.saveBudget()">Salvar</button>
                 </div>
                 <div id="fin-budgets-list" class="fin-budgets-list"></div>
+            </div>
+            <div class="fin-bar-chart-wrap"><canvas id="fin-bar-chart" style="width:100%;height:150px;display:block"></canvas></div>
+            <div class="pareto-section" id="pareto-fin-section">
+                <div class="pareto-hdr">
+                    <span class="pareto-title">📊 Análise de Pareto — Gastos</span>
+                    <span class="pareto-sub">Quais 20% das categorias concentram 80% dos gastos</span>
+                </div>
+                <canvas id="pareto-fin-chart" style="width:100%;height:200px;display:block"></canvas>
+                <div id="pareto-fin-insight" class="pareto-insight"></div>
             </div>
             <div class="fin-filter-row">
                 <button class="fin-filter active" id="ff-all" onclick="orbit.filterTx('all')">Todos</button>
@@ -355,6 +432,7 @@
             <button class="mod-stab" id="stab-nupi" onclick="orbit.switchHub('nupi')">NUPIEEPRO</button>
             <button class="mod-stab" id="stab-fe" onclick="orbit.switchHub('fe')">Fé</button>
             <button class="mod-stab" id="stab-esportes" onclick="orbit.switchHub('esportes')">Esportes</button>
+            <button class="mod-stab" id="stab-mercado" onclick="orbit.switchHub('mercado')">🔁 Mercado</button>
         </div>
 
         <!-- Kanban -->
@@ -375,7 +453,15 @@
                 </div>
                 <div class="mood-week" id="mood-week"></div>
             </div>
+            <div id="habits-heatmap-container" style="margin-bottom:16px"></div>
             <div id="hab-list" class="hab-list"></div>
+            <div class="pareto-section" style="margin-top:16px">
+                <div class="pareto-hdr">
+                    <span class="pareto-title">📊 Consistência dos Hábitos</span>
+                    <span class="pareto-sub">Taxa de conclusão por hábito (últimos 30 dias)</span>
+                </div>
+                <canvas id="pareto-hab-chart" style="width:100%;height:160px;display:block"></canvas>
+            </div>
             <div class="hab-add-form">
                 <div class="plabel">Novo Hábito</div>
                 <div style="display:flex;gap:8px">
@@ -567,6 +653,37 @@
                 </div>
                 <button class="btn btn-ghost" onclick="orbit.addPS5Game()" style="margin-top:6px">ADICIONAR JOGO</button>
             </div>
+        </div>
+
+        <!-- Mercado de Transferências (estilo EA FC) -->
+        <div id="hub-mercado" class="mod-section" style="display:none">
+            <div class="mercado-filters">
+                <button class="mf-btn active" id="mf-global" onclick="orbit.mercadoFilter('global')">🌍 Mercado Global</button>
+                <button class="mf-btn" id="mf-mytime" onclick="orbit.mercadoFilter('mytime')">⭐ Meus Times</button>
+            </div>
+            <div class="mercado-leagues" id="mercado-leagues">
+                <button class="ml-btn active" data-lg="all" onclick="orbit.mercadoLeague('all')">Todas</button>
+                <button class="ml-btn" data-lg="bra.1" onclick="orbit.mercadoLeague('bra.1')">🇧🇷 Brasileirão</button>
+                <button class="ml-btn" data-lg="eng.1" onclick="orbit.mercadoLeague('eng.1')">🏴 Premier</button>
+                <button class="ml-btn" data-lg="esp.1" onclick="orbit.mercadoLeague('esp.1')">🇪🇸 La Liga</button>
+                <button class="ml-btn" data-lg="ita.1" onclick="orbit.mercadoLeague('ita.1')">🇮🇹 Serie A</button>
+                <button class="ml-btn" data-lg="ger.1" onclick="orbit.mercadoLeague('ger.1')">🇩🇪 Bundesliga</button>
+                <button class="ml-btn" data-lg="fra.1" onclick="orbit.mercadoLeague('fra.1')">🇫🇷 Ligue 1</button>
+            </div>
+            <div class="mercado-sort-row">
+                <span class="mercado-sort-label">Ordenar:</span>
+                <button class="ms-btn active" id="ms-date" onclick="orbit.mercadoSort('date')">Data</button>
+                <button class="ms-btn" id="ms-fee" onclick="orbit.mercadoSort('fee')">Valor</button>
+                <button class="ms-btn" id="ms-name" onclick="orbit.mercadoSort('name')">Nome</button>
+            </div>
+            <div class="mercado-table-hdr">
+                <span class="mth-date">Data</span>
+                <span class="mth-player">Jogador</span>
+                <span class="mth-clubs">Transferência</span>
+                <span class="mth-fee">Valor</span>
+            </div>
+            <div id="mercado-list" class="mercado-list"></div>
+            <button id="mercado-load-more" class="btn btn-ghost" style="margin:12px 16px;display:none" onclick="orbit.mercadoLoadMore()">Carregar mais</button>
         </div>
     </div>
 

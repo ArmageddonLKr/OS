@@ -14,6 +14,7 @@ import { Finance, FIN_CATS } from './finance.js';
 import { Habits, Mood } from './habits.js';
 import { Vault } from './vault.js';
 import { Entertainment } from './entertainment.js';
+import { Loader } from './loader.js';
 
 const WEATHER_URL = 'https://api.open-meteo.com/v1/forecast?latitude=-5.0892&longitude=-42.8019&current=temperature_2m,weathercode,windspeed_10m,relativehumidity_2m&timezone=America/Fortaleza';
 const CAMBIO_URL  = 'https://economia.awesomeapi.com.br/json/last/USD-BRL,EUR-BRL';
@@ -101,6 +102,76 @@ class App {
         }
     }
 
+    _applyDynamicTheme() {
+        const h = AI.nowBR().getHours();
+        const a1 = document.querySelector('.aurora-orb.a1');
+        const a2 = document.querySelector('.aurora-orb.a2');
+        if (!a1 || !a2) return;
+        if (h >= 0 && h < 5) {
+            a1.style.background = 'radial-gradient(circle, rgba(120,70,180,0.12) 0%, transparent 65%)';
+            a2.style.background = 'radial-gradient(circle, rgba(60,60,120,0.08) 0%, transparent 65%)';
+        } else if (h >= 5 && h < 12) {
+            a1.style.background = 'radial-gradient(circle, rgba(60,110,200,0.15) 0%, transparent 65%)';
+            a2.style.background = 'radial-gradient(circle, rgba(80,150,210,0.08) 0%, transparent 65%)';
+        } else if (h >= 18 && h < 23) {
+            a1.style.background = 'radial-gradient(circle, rgba(200,110,50,0.12) 0%, transparent 65%)';
+            a2.style.background = 'radial-gradient(circle, rgba(210,150,30,0.08) 0%, transparent 65%)';
+        }
+    }
+
+    _initRipple() {
+        document.addEventListener('click', e => {
+            const btn = e.target.closest('.btn, .nav-btn, .inp-btn, .dqa-btn, .mf-btn, .ml-btn');
+            if (!btn) return;
+            const ripple = document.createElement('span');
+            ripple.className = 'ripple-fx';
+            const rect = btn.getBoundingClientRect();
+            const size = Math.max(rect.width, rect.height) * 2;
+            ripple.style.cssText = `width:${size}px;height:${size}px;left:${e.clientX - rect.left - size / 2}px;top:${e.clientY - rect.top - size / 2}px;`;
+            btn.appendChild(ripple);
+            ripple.addEventListener('animationend', () => ripple.remove());
+        });
+    }
+
+    _initPullToRefresh() {
+        const scroll = document.querySelector('.dash-scroll');
+        if (!scroll) return;
+        let startY = 0, pulling = false;
+        const indicator = document.createElement('div');
+        indicator.className = 'ptr-indicator';
+        indicator.innerHTML = '↓ Atualizando...';
+        scroll.prepend(indicator);
+
+        scroll.addEventListener('touchstart', e => {
+            if (scroll.scrollTop === 0) {
+                startY = e.touches[0].clientY;
+                pulling = true;
+            }
+        }, { passive: true });
+
+        scroll.addEventListener('touchmove', e => {
+            if (!pulling) return;
+            const dy = e.touches[0].clientY - startY;
+            if (dy > 10) {
+                indicator.style.height = Math.min(dy * 0.4, 50) + 'px';
+                indicator.style.opacity = Math.min(dy / 80, 1).toString();
+            }
+        }, { passive: true });
+
+        scroll.addEventListener('touchend', async e => {
+            if (!pulling) return;
+            pulling = false;
+            const dy = e.changedTouches[0].clientY - startY;
+            if (dy > 80) {
+                indicator.textContent = '↻ Recarregando...';
+                await this.loadDashboard();
+                UI.toast('Dashboard atualizado!', 'ok', 1500);
+            }
+            indicator.style.height = '0';
+            indicator.style.opacity = '0';
+        });
+    }
+
     setAccent(color) {
         const cfg = Store.getCfg();
         cfg.accent = color;
@@ -127,12 +198,15 @@ class App {
     boot() {
         this._migrateConfig();
         this.applyAccent();
+        this._applyDynamicTheme();
         this.initOrb();
         this.setupListeners();
         this.setupVoice();
         this.fixViewport();
         this.initPWA();
         this.handleDeepLinks();
+        this._initRipple();
+        this._initPullToRefresh();
 
         const pin = Store.get(K.pin);
         if (!pin) {
@@ -243,6 +317,11 @@ class App {
     enterApp() {
         const pin = document.getElementById('pinscreen');
         if (!pin) return;
+        Loader.show('INICIALIZANDO OS', [
+            'Verificando identidade',
+            'Carregando dados',
+            'Preparando interface'
+        ], 320);
         pin.style.opacity = '0';
         pin.style.transition = 'opacity 0.35s';
         setTimeout(() => {
@@ -251,6 +330,7 @@ class App {
             document.getElementById('app').style.flexDirection = 'column';
             this.loadDashboard();
             this.loadChat();
+            Loader.hide(150);
             this.setupNetworkMonitor();
             this.setupConfirmDialog();
             if (this._pendingOpenChat) { this._pendingOpenChat = false; this.openChat(); }
@@ -261,6 +341,17 @@ class App {
                 const cfg = Store.getCfg();
                 if (!cfg.groqKey && !cfg.apiKey) {
                     setTimeout(() => { this.activeTab = 'ai'; this.openPanel(); }, 800);
+                } else {
+                    Loader.show('BEM-VINDO À OS', [
+                        'Orbit Sophy inicializada',
+                        'Sistema de identidade ativo',
+                        'Memória episódica preparada',
+                        'Prontos para começar'
+                    ], 800);
+                    setTimeout(() => {
+                        Loader.hide();
+                        setTimeout(() => this.openChat(), 500);
+                    }, 3500);
                 }
             }
             // Pede permissão de notificação de forma não intrusiva (5s após entrar)
@@ -407,6 +498,23 @@ class App {
         dash.style.display = 'none';
         this.chatOpen = true;
         history.pushState({ chat: true }, '');
+
+        const moodVal = Mood.today();
+        const moodBadge = document.getElementById('hdr-mood-badge');
+        if (moodBadge) {
+            const emojis = ['', '😞', '😕', '😐', '🙂', '😄'];
+            moodBadge.classList.remove('pulse');
+            if (moodVal) {
+                moodBadge.textContent = emojis[moodVal];
+                moodBadge.style.display = 'inline';
+                moodBadge.title = 'Humor registrado hoje';
+            } else {
+                moodBadge.textContent = '❓';
+                moodBadge.style.display = 'inline';
+                moodBadge.title = 'Humor não registrado hoje';
+                moodBadge.classList.add('pulse');
+            }
+        }
         setTimeout(() => {
             const inp = document.getElementById('msginput');
             if (inp) {
@@ -483,6 +591,28 @@ class App {
                 hint.style.color = '';
             }
         }
+
+        const streak = this._updateStreak();
+        const streakEl = document.getElementById('dash-streak');
+        const streakCount = document.getElementById('streak-count');
+        if (streakEl && streakCount && streak >= 2) {
+            streakEl.style.display = 'flex';
+            streakCount.textContent = streak;
+        }
+    }
+
+    _updateStreak() {
+        const today = AI.todayStr();
+        const data = Store.get(K.streak, { lastOpen: '', count: 0 });
+        const d = new Date();
+        d.setDate(d.getDate() - 1);
+        const yesterday = AI.todayStr(d);
+        if (data.lastOpen === today) return data.count;
+        if (data.lastOpen === yesterday) data.count++;
+        else data.count = 1;
+        data.lastOpen = today;
+        Store.set(K.streak, data);
+        return data.count;
     }
 
     renderMonthLabel() {
@@ -521,13 +651,13 @@ class App {
         const fmt = Finance.fmt;
         const balEl = document.getElementById('dash-balance');
         if (balEl) {
-            balEl.textContent = fmt(s.balance);
+            UI.countUp(balEl, s.balance, 600, fmt);
             balEl.className = `dfr-val ${s.balance >= 0 ? 'finance-color' : 'danger-color'}`;
         }
         const incEl = document.getElementById('dash-income');
-        if (incEl) incEl.textContent = fmt(s.income);
+        if (incEl) UI.countUp(incEl, s.income, 500, fmt);
         const expEl = document.getElementById('dash-expenses');
-        if (expEl) expEl.textContent = fmt(s.expenses);
+        if (expEl) UI.countUp(expEl, s.expenses, 500, fmt);
     }
 
     renderHabitsCard() {
@@ -708,7 +838,7 @@ class App {
         const cal = document.getElementById('agenda-cal');
         if (!cal) return;
 
-        const daysWithEvents = Agenda.getDaysWithEvents(this._agendaYear, this._agendaMonth);
+        const dayEvents = Agenda.getEventsByDay(this._agendaYear, this._agendaMonth);
         const today = new Date().toISOString().slice(0, 10);
 
         const firstDay = new Date(this._agendaYear, this._agendaMonth - 1, 1).getDay();
@@ -728,10 +858,11 @@ class App {
             const ds = `${this._agendaYear}-${String(this._agendaMonth).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
             const isToday = ds === today;
             const isSelected = ds === this._agendaSelectedDay;
-            const hasDot = daysWithEvents.has(d);
+            const evts = dayEvents[d] || [];
+            const dots = evts.slice(0, 3).map(e => `<div class="cal-dot" style="background:${Agenda.catColor(e.cat)}"></div>`).join('');
             html += `<div class="cal-day${isToday ? ' today' : ''}${isSelected ? ' selected' : ''}" onclick="orbit.selectDay('${ds}')">
                 <span class="cal-day-num">${d}</span>
-                ${hasDot ? '<div class="cal-dot"></div>' : ''}
+                ${dots ? `<div class="cal-dots-row">${dots}</div>` : ''}
             </div>`;
         }
 
@@ -742,6 +873,21 @@ class App {
 
         html += '</div>';
         cal.innerHTML = html;
+        this._initCalSwipe();
+    }
+
+    _initCalSwipe() {
+        const calEl = document.getElementById('agenda-cal');
+        if (!calEl || calEl._swipeInit) return;
+        calEl._swipeInit = true;
+        let startX = 0;
+        calEl.addEventListener('touchstart', e => { startX = e.touches[0].clientX; }, { passive: true });
+        calEl.addEventListener('touchend', e => {
+            const dx = e.changedTouches[0].clientX - startX;
+            if (Math.abs(dx) > 50) {
+                dx < 0 ? this.agendaNextMonth() : this.agendaPrevMonth();
+            }
+        });
     }
 
     _renderDayEvents(dateStr) {
@@ -908,6 +1054,8 @@ class App {
         this._renderTxList();
         this.renderFinanceCard();
         this._renderFinChart(s);
+        this._renderFinBarChart();
+        this._renderParetoFin(s.txs);
         this._renderBudgets();
     }
 
@@ -984,7 +1132,97 @@ class App {
 
         const dpr = window.devicePixelRatio || 1;
         const W = canvas.offsetWidth || 320;
-        const H = 180;
+        const H = 200;
+        canvas.width = W * dpr;
+        canvas.height = H * dpr;
+        canvas.style.height = H + 'px';
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+
+        const COLORS = ['#d4af37','#4a9eff','#4ad08a','#ff6b6b','#a78bfa','#f59e0b','#06b6d4'];
+        const cx = W * 0.28, cy = H / 2;
+        const r = Math.min(cy - 14, W * 0.24);
+        const total = byCat.reduce((a, b) => a + b.total, 0);
+        const slices = byCat.slice(0, 7);
+
+        if (canvas._finChartRAF) cancelAnimationFrame(canvas._finChartRAF);
+        let progress = 0;
+        const animate = () => {
+            ctx.clearRect(0, 0, W, H);
+            progress = Math.min(progress + 0.06, 1);
+            const ease = 1 - Math.pow(1 - progress, 3);
+
+            let angle = -Math.PI / 2;
+            slices.forEach((cat, i) => {
+                const slice = (cat.total / total) * Math.PI * 2 * ease;
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                ctx.arc(cx, cy, r, angle, angle + slice);
+                ctx.closePath();
+                ctx.fillStyle = COLORS[i % COLORS.length];
+                ctx.fill();
+                angle += slice;
+            });
+
+            ctx.beginPath();
+            ctx.arc(cx, cy, r * 0.52, 0, Math.PI * 2);
+            ctx.fillStyle = '#080808';
+            ctx.fill();
+
+            if (progress >= 0.95) {
+                ctx.textAlign = 'center';
+                ctx.fillStyle = 'rgba(255,255,255,0.9)';
+                ctx.font = `700 13px Arial, sans-serif`;
+                ctx.fillText(Finance.fmt(total), cx, cy + 5);
+                ctx.fillStyle = 'rgba(255,255,255,0.4)';
+                ctx.font = `10px Arial, sans-serif`;
+                ctx.fillText('GASTOS', cx, cy - 9);
+            }
+
+            const lx = W * 0.56;
+            ctx.textAlign = 'left';
+            byCat.slice(0, Math.min(5, byCat.length)).forEach((cat, i) => {
+                const y = 20 + i * 36;
+                ctx.fillStyle = COLORS[i % COLORS.length];
+                ctx.beginPath();
+                ctx.arc(lx + 5, y - 3, 5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = 'rgba(255,255,255,0.5)';
+                ctx.font = `10px Arial, sans-serif`;
+                ctx.fillText(cat.name.slice(0, 11), lx + 14, y);
+                ctx.fillStyle = 'rgba(255,255,255,0.85)';
+                ctx.font = `600 12px Arial, sans-serif`;
+                ctx.fillText(Finance.fmt(cat.total), lx + 14, y + 14);
+                ctx.fillStyle = 'rgba(255,255,255,0.35)';
+                ctx.font = `9px Arial, sans-serif`;
+                ctx.fillText(`${Math.round((cat.total / total) * 100)}%`, lx + 14, y + 26);
+            });
+
+            if (progress < 1) canvas._finChartRAF = requestAnimationFrame(animate);
+        };
+        canvas._finChartRAF = requestAnimationFrame(animate);
+    }
+
+    _renderFinBarChart() {
+        const canvas = document.getElementById('fin-bar-chart');
+        if (!canvas) return;
+
+        const months = [];
+        for (let i = 5; i >= 0; i--) {
+            const d = new Date();
+            d.setMonth(d.getMonth() - i);
+            const y = d.getFullYear(), m = d.getMonth() + 1;
+            const txs = Finance.getMonth(y, m);
+            months.push({
+                label: MONTHS_PT[m - 1].slice(0, 3),
+                income: txs.filter(t => t.type === 'income').reduce((a, b) => a + (b.amount || 0), 0),
+                expense: txs.filter(t => t.type === 'expense').reduce((a, b) => a + (b.amount || 0), 0)
+            });
+        }
+
+        const dpr = window.devicePixelRatio || 1;
+        const W = canvas.offsetWidth || 320;
+        const H = 150;
         canvas.width = W * dpr;
         canvas.height = H * dpr;
         canvas.style.height = H + 'px';
@@ -992,42 +1230,209 @@ class App {
         ctx.scale(dpr, dpr);
         ctx.clearRect(0, 0, W, H);
 
-        const COLORS = ['#c9982a','#4a9eff','#4ad08a','#ff5a5a','#a78bfa','#f59e0b'];
-        const cx = W * 0.27, cy = H / 2, r = Math.min(cy - 12, W * 0.22);
-        const total = byCat.reduce((a, b) => a + b.total, 0);
-        let angle = -Math.PI / 2;
+        const maxVal = Math.max(...months.map(m => Math.max(m.income, m.expense)), 1);
+        const pad = { l: 8, r: 8, t: 10, b: 22 };
+        const chartH = H - pad.t - pad.b;
+        const groupW = (W - pad.l - pad.r) / months.length;
+        const barW = groupW * 0.28;
 
-        byCat.slice(0, 6).forEach((cat, i) => {
-            const slice = (cat.total / total) * Math.PI * 2;
+        months.forEach((m, i) => {
+            const x = pad.l + i * groupW + groupW * 0.1;
+            const ih = (m.income / maxVal) * chartH;
+            ctx.fillStyle = 'rgba(74,208,138,0.75)';
             ctx.beginPath();
-            ctx.moveTo(cx, cy);
-            ctx.arc(cx, cy, r, angle, angle + slice);
-            ctx.closePath();
-            ctx.fillStyle = COLORS[i % COLORS.length];
+            ctx.roundRect(x, pad.t + chartH - ih, barW, ih, [3, 3, 0, 0]);
             ctx.fill();
-            angle += slice;
+            const eh = (m.expense / maxVal) * chartH;
+            ctx.fillStyle = 'rgba(255,90,90,0.75)';
+            ctx.beginPath();
+            ctx.roundRect(x + barW + 2, pad.t + chartH - eh, barW, eh, [3, 3, 0, 0]);
+            ctx.fill();
+            ctx.fillStyle = 'rgba(255,255,255,0.35)';
+            ctx.font = '9px Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(m.label, x + barW + 1, H - 6);
         });
 
-        ctx.beginPath();
-        ctx.arc(cx, cy, r * 0.54, 0, Math.PI * 2);
-        ctx.fillStyle = '#080808';
-        ctx.fill();
-
-        ctx.font = `600 11px 'Geist Variable', sans-serif`;
+        ctx.fillStyle = 'rgba(74,208,138,0.8)';
+        ctx.fillRect(pad.l, pad.t, 8, 8);
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.font = '10px Arial, sans-serif';
         ctx.textAlign = 'left';
-        const lx = W * 0.54;
-        byCat.slice(0, 5).forEach((cat, i) => {
-            const y = 22 + i * 32;
+        ctx.fillText('Entradas', pad.l + 12, pad.t + 8);
+        ctx.fillStyle = 'rgba(255,90,90,0.8)';
+        ctx.fillRect(pad.l + 80, pad.t, 8, 8);
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.fillText('Saídas', pad.l + 92, pad.t + 8);
+    }
+
+    _renderParetoFin(txs) {
+        const canvas = document.getElementById('pareto-fin-chart');
+        if (!canvas) return;
+
+        const expenses = (txs || []).filter(t => t.type === 'expense');
+        const insight = document.getElementById('pareto-fin-insight');
+        if (expenses.length < 2) {
+            canvas.style.display = 'none';
+            if (insight) insight.innerHTML = '';
+            return;
+        }
+        canvas.style.display = 'block';
+
+        const byCat = Finance.byCategory(expenses);
+        const total = byCat.reduce((a, b) => a + b.total, 0);
+        if (!total) return;
+
+        const sorted = [...byCat].sort((a, b) => b.total - a.total);
+        const dpr = window.devicePixelRatio || 1;
+        const W = canvas.offsetWidth || 320;
+        const H = 200;
+        canvas.width = W * dpr;
+        canvas.height = H * dpr;
+        canvas.style.height = H + 'px';
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        ctx.clearRect(0, 0, W, H);
+
+        const pad = { l: 8, r: 8, t: 16, b: 40 };
+        const chartW = W - pad.l - pad.r;
+        const chartH = H - pad.t - pad.b;
+        const barW = (chartW / sorted.length) - 4;
+
+        const COLORS = ['#d4af37', '#4a9eff', '#4ad08a', '#ff6b6b', '#a78bfa', '#f59e0b', '#06b6d4'];
+
+        const maxVal = sorted[0].total;
+        sorted.forEach((cat, i) => {
+            const x = pad.l + i * (barW + 4);
+            const h = (cat.total / maxVal) * chartH;
+            const y = pad.t + chartH - h;
+
             ctx.fillStyle = COLORS[i % COLORS.length];
+            ctx.globalAlpha = 0.85;
             ctx.beginPath();
-            ctx.roundRect(lx, y - 8, 8, 8, 2);
+            ctx.roundRect(x, y, barW, h, [4, 4, 0, 0]);
             ctx.fill();
-            ctx.fillStyle = 'rgba(255,255,255,0.55)';
-            ctx.font = `10px 'Geist Variable', sans-serif`;
-            ctx.fillText(cat.name.slice(0, 12), lx + 12, y);
-            ctx.fillStyle = 'rgba(255,255,255,0.82)';
-            ctx.font = `600 12px 'JetBrains Mono', monospace`;
-            ctx.fillText(Finance.fmt(cat.total), lx + 12, y + 15);
+            ctx.globalAlpha = 1;
+
+            ctx.fillStyle = 'rgba(255,255,255,0.4)';
+            ctx.font = '9px Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(cat.name.slice(0, 6), x + barW / 2, H - 26);
+
+            ctx.fillStyle = 'rgba(255,255,255,0.7)';
+            ctx.font = '8px Arial, sans-serif';
+            const pct = Math.round((cat.total / total) * 100);
+            ctx.fillText(`${pct}%`, x + barW / 2, y - 4);
+        });
+
+        let cumPct = 0;
+        const linePts = sorted.map((cat, i) => {
+            cumPct += (cat.total / total) * 100;
+            const x = pad.l + i * (barW + 4) + barW / 2;
+            const y = pad.t + chartH - (Math.min(cumPct, 100) / 100) * chartH;
+            return { x, y, pct: cumPct };
+        });
+
+        const p80idx = linePts.findIndex(p => p.pct >= 80);
+        if (p80idx >= 0) {
+            ctx.strokeStyle = 'rgba(212,175,55,0.4)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 3]);
+            ctx.beginPath();
+            ctx.moveTo(linePts[p80idx].x, pad.t);
+            ctx.lineTo(linePts[p80idx].x, pad.t + chartH);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+
+        ctx.beginPath();
+        ctx.moveTo(linePts[0].x, linePts[0].y);
+        linePts.slice(1).forEach(p => ctx.lineTo(p.x, p.y));
+        ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        linePts.forEach(p => {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+            ctx.fillStyle = '#fff';
+            ctx.fill();
+        });
+
+        ctx.fillStyle = 'rgba(255,255,255,0.25)';
+        ctx.font = '9px Arial, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText('80%', W - pad.r, pad.t + chartH * 0.2 + 4);
+
+        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        const y80 = pad.t + chartH - (80 / 100) * chartH;
+        ctx.moveTo(pad.l, y80);
+        ctx.lineTo(W - pad.r, y80);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        if (insight && p80idx >= 0) {
+            const topCats = sorted.slice(0, p80idx + 1).map(c => c.name).join(', ');
+            const pctCats = Math.round(((p80idx + 1) / sorted.length) * 100);
+            insight.innerHTML = `<span class="pi-highlight">${p80idx + 1} categoria${p80idx > 0 ? 's' : ''}</span> (${pctCats}% do total) concentram 80% dos seus gastos: <em>${topCats}</em>`;
+        }
+    }
+
+    _renderParetoHab() {
+        const canvas = document.getElementById('pareto-hab-chart');
+        if (!canvas) return;
+        const habits = Habits.getAll();
+        if (!habits.length) { canvas.style.display = 'none'; return; }
+        canvas.style.display = 'block';
+
+        const rates = habits.map(h => {
+            const last30 = Habits.getLast30(h);
+            const done = last30.filter(d => d.done).length;
+            return { name: h.icon + ' ' + h.name, rate: Math.round((done / 30) * 100) };
+        }).sort((a, b) => b.rate - a.rate);
+
+        const dpr = window.devicePixelRatio || 1;
+        const W = canvas.offsetWidth || 300;
+        const H = 160;
+        canvas.width = W * dpr;
+        canvas.height = H * dpr;
+        canvas.style.height = H + 'px';
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        ctx.clearRect(0, 0, W, H);
+
+        const pad = { l: 8, r: 8, t: 10, b: 36 };
+        const chartW = W - pad.l - pad.r;
+        const chartH = H - pad.t - pad.b;
+        const barW = (chartW / rates.length) - 3;
+
+        rates.forEach((h, i) => {
+            const x = pad.l + i * (barW + 3);
+            const barH = (h.rate / 100) * chartH;
+            const y = pad.t + chartH - barH;
+
+            const green = Math.round((h.rate / 100) * 160);
+            ctx.fillStyle = `rgba(${80 - Math.round(h.rate * 0.3)},${100 + green},${80},0.8)`;
+            ctx.beginPath();
+            ctx.roundRect(x, y, barW, barH, [3, 3, 0, 0]);
+            ctx.fill();
+
+            ctx.fillStyle = 'rgba(255,255,255,0.6)';
+            ctx.font = '8px Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${h.rate}%`, x + barW / 2, y - 3);
+
+            ctx.save();
+            ctx.translate(x + barW / 2, H - 4);
+            ctx.rotate(-0.6);
+            ctx.fillStyle = 'rgba(255,255,255,0.35)';
+            ctx.font = '9px Arial, sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillText(h.name.slice(0, 10), 0, 0);
+            ctx.restore();
         });
     }
 
@@ -1623,7 +2028,7 @@ class App {
         document.querySelectorAll('#tab-hub .mod-stab').forEach(b => b.classList.remove('active'));
         document.getElementById(`stab-${sec}`)?.classList.add('active');
 
-        const sections = ['kanban','habitos','tools','nupi','fe','esportes'];
+        const sections = ['kanban','habitos','tools','nupi','fe','esportes','mercado'];
         sections.forEach(s => {
             const el = document.getElementById(`hub-${s}`);
             if (el) el.style.display = s === sec ? '' : 'none';
@@ -1635,6 +2040,7 @@ class App {
         else if (sec === 'nupi') this.renderHubNupi();
         else if (sec === 'fe') this.renderHubFe();
         else if (sec === 'esportes') this.renderHubEsportes();
+        else if (sec === 'mercado') this.renderHubMercado();
     }
 
     renderHubNupi() {
@@ -1769,6 +2175,7 @@ class App {
 
     renderHubHabitos() {
         this._renderMood();
+        this._renderHabitsHeatmap();
         const habits = Habits.getAll();
         const list = document.getElementById('hab-list');
         if (!list) return;
@@ -1799,10 +2206,49 @@ class App {
             }).join('');
         }
 
+        this._renderParetoHab();
+
         const ideasList = document.getElementById('ideas-list');
         if (ideasList && document.getElementById('hub-tools')?.style.display === '') {
             this._renderIdeasList();
         }
+    }
+
+    _renderHabitsHeatmap() {
+        const container = document.getElementById('habits-heatmap-container');
+        if (!container) return;
+        const habits = Habits.getAll();
+        if (!habits.length) { container.innerHTML = ''; return; }
+
+        const today = new Date();
+        const days = [];
+        for (let i = 364; i >= 0; i--) {
+            const d = new Date(today);
+            d.setDate(d.getDate() - i);
+            const ds = d.toISOString().slice(0, 10);
+            const done = habits.filter(h => Habits.getDoneForDate(h.id, ds)).length;
+            days.push({ ds, done, max: habits.length });
+        }
+
+        const COLS = Math.ceil(days.length / 7);
+        const cellSize = Math.max(Math.floor((container.offsetWidth - 16) / COLS), 4);
+
+        let html = `<div class="heatmap-grid" style="grid-template-columns:repeat(${COLS},${cellSize}px)">`;
+        days.forEach(d => {
+            const intensity = d.max ? Math.round((d.done / d.max) * 4) : 0;
+            html += `<div class="hm-cell hm-i${intensity}" title="${d.ds}: ${d.done}/${d.max} hábitos"></div>`;
+        });
+        html += '</div>';
+        html += `<div class="hm-legend">
+            <span style="font-size:10px;color:rgba(255,255,255,0.3)">Menos</span>
+            <div class="hm-cell hm-i0"></div>
+            <div class="hm-cell hm-i1"></div>
+            <div class="hm-cell hm-i2"></div>
+            <div class="hm-cell hm-i3"></div>
+            <div class="hm-cell hm-i4"></div>
+            <span style="font-size:10px;color:rgba(255,255,255,0.3)">Mais</span>
+        </div>`;
+        container.innerHTML = html;
     }
 
     addHabit() {
@@ -2014,9 +2460,18 @@ class App {
     }
 
     async renderHubEsportes() {
+        Loader.show('CARREGANDO ESPORTES', [
+            'Buscando dados dos times',
+            'Carregando classificação',
+            'Buscando próximos jogos'
+        ], 450);
         // Times
         this._renderTeamsList();
-        Entertainment.getTeams().forEach(t => this._loadTeamGame(t));
+        Entertainment.getTeams().forEach(t => {
+            this._loadTeamGame(t);
+            this._loadTeamResults(t);
+            this._loadTeamStanding(t);
+        });
 
         // Alertas de transferência
         this._renderTransferWatches();
@@ -2068,6 +2523,7 @@ class App {
 
         this._renderFighters();
         this._renderPS5();
+        Loader.hide(150);
     }
 
     /* ── BOXE / MMA — LUTADORES ─────────────────────── */
@@ -2152,7 +2608,9 @@ class App {
                         <button class="stc-del" onclick="orbit.sportRemoveTeam('${t.id}')">×</button>
                     </div>
                 </div>
+                <div class="stc-results" id="stc-results-${t.id}"></div>
                 <div class="stcg" id="stcg-${t.id}"><span style="color:var(--fg-4);font-size:12px">Buscando...</span></div>
+                <div class="stc-standing" id="stc-stand-${t.id}"></div>
             </div>
         `).join('');
     }
@@ -2170,6 +2628,31 @@ class App {
         el.innerHTML = `
             <div class="stcg-teams">${game.home} <span class="stcg-score">${score}</span> ${game.away}</div>
             <div class="stcg-info">${game.live ? '🔴 AO VIVO' : `${fmtDate} · ${fmtTime}`}</div>
+        `;
+    }
+
+    async _loadTeamResults(team) {
+        const el = document.getElementById(`stc-results-${team.id}`);
+        if (!el) return;
+        const results = await Entertainment.getTeamLastResults(team.espnId, team.espnLeague);
+        if (!results.length) { el.innerHTML = ''; return; }
+        const cls = { W: 'chip-win', L: 'chip-loss', D: 'chip-draw' };
+        el.innerHTML = `<div class="stc-chips-row">${results.map(r =>
+            `<div class="stc-chip ${cls[r.result]}" title="${r.opp}: ${r.myScore}×${r.oppScore}">${r.result}</div>`
+        ).join('')}</div>`;
+    }
+
+    async _loadTeamStanding(team) {
+        const el = document.getElementById(`stc-stand-${team.id}`);
+        if (!el) return;
+        const s = await Entertainment.getTeamStanding(team.espnId, team.espnLeague);
+        if (!s) { el.innerHTML = ''; return; }
+        el.innerHTML = `
+            <div class="stc-standing-row">
+                <span class="stc-pos">${s.pos}º</span>
+                <span class="stc-pts">${s.pts} pts</span>
+                <span class="stc-wdl">${s.wins}V ${s.draws}E ${s.losses}D</span>
+            </div>
         `;
     }
 
@@ -2242,6 +2725,8 @@ class App {
         this.sportHideAddModal();
         this._renderTeamsList();
         this._loadTeamGame(team);
+        this._loadTeamResults(team);
+        this._loadTeamStanding(team);
         UI.toast(`${t.name} adicionado!`, 'ok');
     }
 
@@ -2302,6 +2787,195 @@ class App {
                 <a href="${tmURL}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-4);text-decoration:underline">Ver mais no Transfermarkt</a>
             </div>
         </div>`;
+    }
+
+    /* ═══════════════════════════════════════════════
+       HUB · MERCADO DE TRANSFERÊNCIAS (estilo EA FC)
+       ═══════════════════════════════════════════════ */
+    async renderHubMercado() {
+        if (!this._mercadoFilter) this._mercadoFilter = 'global';
+        if (!this._mercadoLeague) this._mercadoLeague = 'all';
+        if (!this._mercadoSort) this._mercadoSort = 'date';
+        this._mercadoPage = 1;
+        await this._loadMercadoData();
+    }
+
+    async _loadMercadoData() {
+        this._renderMercadoSkeleton();
+        const data = this._mercadoFilter === 'mytime'
+            ? await Entertainment.getMyTeamsTransfers()
+            : await Entertainment.getGlobalTransfers(this._mercadoLeague);
+        this._mercadoData = data || [];
+        this._renderMercadoList();
+    }
+
+    _renderMercadoSkeleton() {
+        const el = document.getElementById('mercado-list');
+        if (!el) return;
+        const btn = document.getElementById('mercado-load-more');
+        if (btn) btn.style.display = 'none';
+        el.innerHTML = [1,2,3,4,5,6].map(() => `
+            <div class="mercado-sk-row">
+                <div class="mercado-sk-circle"></div>
+                <div class="mercado-sk-line" style="width:70%"></div>
+                <div class="mercado-sk-line" style="width:60%"></div>
+                <div class="mercado-sk-line" style="width:40px;margin-left:auto"></div>
+            </div>
+        `).join('');
+    }
+
+    mercadoFilter(f) {
+        this._mercadoFilter = f;
+        document.getElementById('mf-global')?.classList.toggle('active', f === 'global');
+        document.getElementById('mf-mytime')?.classList.toggle('active', f === 'mytime');
+        const leaguesEl = document.getElementById('mercado-leagues');
+        if (leaguesEl) leaguesEl.style.display = f === 'mytime' ? 'none' : '';
+        this.renderHubMercado();
+    }
+
+    mercadoLeague(lg) {
+        this._mercadoLeague = lg;
+        document.querySelectorAll('.ml-btn').forEach(b => b.classList.toggle('active', b.dataset.lg === lg));
+        this.renderHubMercado();
+    }
+
+    mercadoSort(s) {
+        this._mercadoSort = s;
+        document.querySelectorAll('.ms-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(`ms-${s}`)?.classList.add('active');
+        this._mercadoPage = 1;
+        this._renderMercadoList();
+    }
+
+    mercadoLoadMore() {
+        this._mercadoPage++;
+        this._renderMercadoList();
+    }
+
+    _renderMercadoList() {
+        const el = document.getElementById('mercado-list');
+        const btn = document.getElementById('mercado-load-more');
+        if (!el) return;
+
+        let list = this._mercadoLeague !== 'all' && this._mercadoFilter === 'mytime'
+            ? this._mercadoData.filter(t => t.league === this._mercadoLeague)
+            : this._mercadoData.slice();
+
+        const sortFn = {
+            date: (a, b) => this._dateMs(b.date) - this._dateMs(a.date),
+            fee:  (a, b) => this._parseFee(b.fee) - this._parseFee(a.fee),
+            name: (a, b) => (a.name || '').localeCompare(b.name || '')
+        }[this._mercadoSort] || (() => 0);
+        list = list.sort(sortFn);
+
+        if (!list.length) {
+            el.innerHTML = `<div style="padding:30px 16px;text-align:center;color:var(--fg-4);font-size:13px">
+                Nenhuma transferência encontrada agora.
+            </div>`;
+            if (btn) btn.style.display = 'none';
+            return;
+        }
+
+        const pageSize = 20;
+        const visible = list.slice(0, this._mercadoPage * pageSize);
+        this._mercadoVisible = visible;
+        el.innerHTML = visible.map((t, i) => this._buildTransferCard(t, i)).join('');
+        if (btn) btn.style.display = visible.length < list.length ? '' : 'none';
+    }
+
+    _buildTransferCard(t, i) {
+        const dateStr = this._formatTransferDate(t.date);
+        const feeInfo = this._formatFee(t.fee);
+        const crest = (name) => name && name !== '?'
+            ? `<div class="mc-crest-ph">${name.slice(0, 2).toUpperCase()}</div>`
+            : `<div class="mc-crest-ph">?</div>`;
+        const [first, ...rest] = (t.name || '?').split(' ');
+        const last = rest.join(' ') || first;
+
+        return `<div class="mercado-card" onclick="orbit.openTransferDetail(${i})">
+            <div class="mc-date">${dateStr}</div>
+            <div class="mc-player">
+                <div class="mc-avatar">👤</div>
+                <div class="mc-name-wrap">
+                    <div class="mc-first">${rest.length ? first : ''}</div>
+                    <div class="mc-last">${last}</div>
+                    ${t.position ? `<div class="mc-pos">${t.position}</div>` : ''}
+                </div>
+            </div>
+            <div class="mc-clubs">
+                ${crest(t.from)}
+                <span class="mc-arrow">→</span>
+                ${crest(t.to)}
+            </div>
+            <div class="mc-fee ${feeInfo.cls}">${feeInfo.label}</div>
+        </div>`;
+    }
+
+    openTransferDetail(i) {
+        const t = this._mercadoVisible?.[i];
+        if (!t) return;
+        const feeInfo = this._formatFee(t.fee);
+        const overlay = document.createElement('div');
+        overlay.className = 'mercado-detail';
+        overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+        overlay.innerHTML = `<div class="mercado-detail-content">
+            <div class="md-player-row">
+                <div class="md-avatar-lg">👤</div>
+                <div class="md-player-info">
+                    <h3>${t.name}</h3>
+                    <p>${t.position || ''}${t.position ? ' · ' : ''}${this._formatTransferDate(t.date, true)}</p>
+                </div>
+            </div>
+            <div class="md-transfer-visual">
+                <div class="md-club"><div class="mc-crest-ph">${(t.from || '?').slice(0,2).toUpperCase()}</div><span class="md-club-name">${t.from || '?'}</span></div>
+                <div class="md-arrow-big">→</div>
+                <div class="md-club"><div class="mc-crest-ph">${(t.to || '?').slice(0,2).toUpperCase()}</div><span class="md-club-name">${t.to || '?'}</span></div>
+            </div>
+            <div class="md-fee-big ${feeInfo.cls}">${feeInfo.label}</div>
+            <div class="md-fee-label">Valor da transferência</div>
+        </div>`;
+        document.body.appendChild(overlay);
+    }
+
+    _dateMs(d) {
+        if (!d) return 0;
+        if (typeof d === 'number') return d > 1e12 ? d : d * 1000;
+        const parsed = Date.parse(d);
+        return isNaN(parsed) ? 0 : parsed;
+    }
+
+    _formatTransferDate(d, full = false) {
+        const ms = this._dateMs(d);
+        if (!ms) return full ? '—' : '—\n—';
+        const date = new Date(ms);
+        if (full) return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
+        const day = date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }).replace('.', '');
+        const year = date.getFullYear();
+        return `${day}<span>${year}</span>`;
+    }
+
+    _parseFee(fee) {
+        if (fee == null) return -1;
+        if (typeof fee === 'number') return fee;
+        const s = String(fee).toLowerCase();
+        if (s.includes('loan') || s.includes('empr')) return -2;
+        if (s.includes('free') || s.includes('livre') || s === '-' || s === '—') return -3;
+        const m = s.match(/([\d.,]+)\s*(m|mil|k|bn|b)?/);
+        if (!m) return -1;
+        let n = parseFloat(m[1].replace(/\./g, '').replace(',', '.'));
+        const unit = m[2];
+        if (unit === 'm') n *= 1e6;
+        else if (unit === 'k' || unit === 'mil') n *= 1e3;
+        else if (unit === 'bn' || unit === 'b') n *= 1e9;
+        return isNaN(n) ? -1 : n;
+    }
+
+    _formatFee(fee) {
+        if (fee == null || fee === '—' || fee === '-') return { label: '—', cls: 'unknown' };
+        const s = String(fee).toLowerCase();
+        if (s.includes('loan') || s.includes('empr')) return { label: 'Empréstimo', cls: 'loan' };
+        if (s.includes('free') || s.includes('livre')) return { label: 'Livre', cls: 'free' };
+        return { label: String(fee), cls: '' };
     }
 
     /* ── NOTÍCIAS ──────────────────────────────────── */
@@ -2796,10 +3470,11 @@ class App {
         UI.addMsg('sophy', q, false);
     }
 
-    async handleSend() {
+    async handleSend(overrideText, opts = {}) {
         if (this.busy) return;
         const inp = document.getElementById('msginput');
-        const text = inp.value.trim();
+        const isOverride = typeof overrideText === 'string';
+        const text = (isOverride ? overrideText : inp.value).trim();
         if (!text && !this.pendingImage) return;
 
         if (text === '/esquece') {
@@ -2814,6 +3489,14 @@ class App {
             IdeaVault.add(text.slice(7));
             UI.toast('Ideia salva! 💡', 'ok');
             inp.value = '';
+            return;
+        }
+
+        const diagTriggers = ['diagnóstico', 'diagnostico', '/diag', 'análise geral', 'analise geral', 'status geral', 'relatório geral', 'relatorio geral', 'resumo completo'];
+        if (!isOverride && diagTriggers.some(t => text.toLowerCase().includes(t))) {
+            inp.value = '';
+            inp.style.height = 'auto';
+            await this._runDiagnostic();
             return;
         }
 
@@ -2847,9 +3530,11 @@ class App {
         if (cancelBtn) cancelBtn.style.display = '';
         if (sendBtn) sendBtn.style.display = 'none';
 
-        UI.addMsg('user', text, false, this.pendingImage);
-        inp.value = '';
-        inp.style.height = 'auto';
+        if (!opts.silent) UI.addMsg('user', text, false, this.pendingImage);
+        if (!isOverride) {
+            inp.value = '';
+            inp.style.height = 'auto';
+        }
         // Mantém o teclado aberto após o envio (mobile)
         this._keepKeyboard = true;
         try { inp.focus({ preventScroll: true }); } catch (_) { inp.focus(); }
@@ -2907,7 +3592,13 @@ class App {
                 // Sem URL colada, mas a pergunta pede dado fresco → busca na web
                 try {
                     UI.setStatus('buscando na web...');
+                    Loader.show('BUSCANDO NA INTERNET', [
+                        'Consultando fontes',
+                        'Filtrando resultados',
+                        'Preparando resposta'
+                    ], 500);
                     const found = await AI.webSearch(text, ctrl.signal);
+                    Loader.hide(80);
                     if (found) {
                         aiMessages = [...aiMessages];
                         const last = aiMessages[aiMessages.length - 1];
@@ -2920,7 +3611,7 @@ class App {
                         }
                         UI.toast('Internet consultada 🌐', 'ok');
                     }
-                } catch (_) {}
+                } catch (_) { Loader.hide(0); }
                 UI.setStatus('respondendo...');
             }
 
@@ -3117,11 +3808,47 @@ class App {
     handleInput() {
         const inp = document.getElementById('msginput');
         if (!inp) return;
-        const val = inp.value;
+        let val = inp.value;
+        const MAX_CHARS = 4000;
+        if (val.length > MAX_CHARS) {
+            val = val.slice(0, MAX_CHARS);
+            inp.value = val;
+        }
         if (val === '/') this.showCmdPalette();
         else this.hideCmdPalette();
         inp.style.height = 'auto';
         inp.style.height = Math.min(inp.scrollHeight, 120) + 'px';
+        this._updateCharIndicator(val, MAX_CHARS);
+        this._updateInputModeTag(val);
+    }
+
+    _updateCharIndicator(val, max) {
+        const ind = document.getElementById('char-indicator');
+        const count = document.getElementById('char-count');
+        const bar = document.getElementById('char-bar');
+        if (!ind || !count || !bar) return;
+        const len = val.length;
+        if (len <= 100) { ind.style.display = 'none'; return; }
+        ind.style.display = 'flex';
+        count.textContent = len > 1000 ? (len / 1000).toFixed(1) + 'k' : String(len);
+        const pct = Math.min(len / max, 1) * 100;
+        bar.style.width = pct + '%';
+        let color = 'var(--fg-3)';
+        if (pct >= 90) color = '#e5484d';
+        else if (pct >= 70) color = 'var(--gold)';
+        bar.style.background = color;
+        count.style.color = pct >= 90 ? '#e5484d' : (pct >= 70 ? 'var(--gold)' : 'var(--fg-4)');
+    }
+
+    _updateInputModeTag(val) {
+        const tag = document.getElementById('inp-mode-tag');
+        if (!tag) return;
+        if (val.length > 15 && AI.needsWeb(val)) {
+            tag.textContent = '🌐 Vai pesquisar na internet';
+            tag.style.display = 'block';
+        } else {
+            tag.style.display = 'none';
+        }
     }
 
     showCmdPalette() { const pal = document.getElementById('cmd-palette'); if (pal) pal.style.display = 'flex'; }
@@ -3140,7 +3867,106 @@ class App {
             this.showPinned();
         } else if (cmd === 'exportar') {
             this.exportChat();
+        } else if (cmd === 'diag') {
+            this._runDiagnostic();
         }
+    }
+
+    /* ── RESUMO DO DIA / DIAGNÓSTICO ── */
+    async getDailyBrief() {
+        if (this.busy) return;
+        Loader.show('PREPARANDO BRIEFING', [
+            'Verificando agenda',
+            'Analisando hábitos',
+            'Consultando finanças',
+            'Sophy preparando resumo'
+        ], 500);
+
+        const agCtx = AI.agendaContext();
+        const s = Finance.getSummary(new Date().getFullYear(), new Date().getMonth() + 1);
+        const finCtx = `\nSaldo atual: ${Finance.fmt(s.balance)}${s.balance < 0 ? ' (negativo)' : ''}, ${s.txs.filter(t => t.type === 'expense').length} gastos no mês`;
+        const habits = Habits.getAll();
+        const today = Habits.today();
+        const done = habits.filter(h => (h.done || []).includes(today)).length;
+        const habCtx = `\nHábitos: ${done}/${habits.length} feitos hoje`;
+
+        const prompt = `O Pai acabou de abrir o app. Dê um briefing diário CURTO (máx 4 linhas) no teu estilo: o que tem na agenda hoje, como estão os hábitos, situação financeira resumida, e encerra com uma motivação rápida. Sem formatação, papo de WhatsApp mesmo.\n${agCtx}${finCtx}${habCtx}`;
+
+        this.openChat();
+        await new Promise(r => setTimeout(r, 300));
+        Loader.hide(100);
+        await this.handleSend(prompt, { silent: true });
+    }
+
+    async _runDiagnostic() {
+        if (this.busy) return;
+        Loader.show('RODANDO DIAGNÓSTICO', [
+            'Analisando finanças',
+            'Verificando hábitos',
+            'Consultando agenda',
+            'Sophy preparando relatório'
+        ], 500);
+
+        const now = new Date();
+        const y = now.getFullYear(), m = now.getMonth() + 1;
+
+        const finSummary = Finance.getSummary(y, m);
+        const byCat = Finance.byCategory((finSummary.txs || []).filter(t => t.type === 'expense'));
+        const topExpense = byCat[0];
+        const finHealth = finSummary.balance >= 0 ? 'positivo' : 'negativo';
+
+        const habits = Habits.getAll();
+        const today = Habits.today();
+        const habitsDoneToday = habits.filter(h => (h.done || []).includes(today)).length;
+        const habitsTotal = habits.length;
+        const habitRate = habitsTotal > 0 ? Math.round((habitsDoneToday / habitsTotal) * 100) : 0;
+        const streakMax = habits.length ? Math.max(...habits.map(h => Habits.getStreak(h))) : 0;
+
+        const moodData = Mood.last7();
+        const moodValues = moodData.filter(d => d.value);
+        const moodAvg = moodValues.length ? moodValues.reduce((a, b) => a + b.value, 0) / moodValues.length : 0;
+        const moodEmojis = ['', '😞', '😕', '😐', '🙂', '😄'];
+        const moodLabel = moodEmojis[Math.round(moodAvg)] || '😐';
+
+        const todayStr = AI.todayStr();
+        const agenda = Store.get(K.agenda, []);
+        const todayEvents = agenda.filter(e => e.date === todayStr);
+        const upcoming = agenda.filter(e => e.date > todayStr).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 3);
+
+        const streakData = Store.get('orbit_streak', { count: 0 });
+        const disciplines = Store.get(K.disc, []);
+
+        const diagPrompt = `DIAGNÓSTICO GERAL SOLICITADO — ${new Date().toLocaleString('pt-BR')}
+
+Gera um RELATÓRIO DIAGNÓSTICO COMPLETO no teu estilo (papo real, não formal), com estas seções:
+
+## 💰 FINANÇAS (${MONTHS_PT[m - 1]})
+- Saldo: ${Finance.fmt(finSummary.balance)} (${finHealth})
+- Entradas: ${Finance.fmt(finSummary.income)}
+- Saídas: ${Finance.fmt(finSummary.expenses)}
+- Maior gasto: ${topExpense ? `${topExpense.name} — ${Finance.fmt(topExpense.total)} (${Math.round((topExpense.total / (finSummary.expenses || 1)) * 100)}%)` : 'nenhum'}
+
+## ✅ HÁBITOS (hoje)
+- Concluídos: ${habitsDoneToday}/${habitsTotal} (${habitRate}%)
+- Maior streak ativo: ${streakMax} dias
+- Humor médio da semana: ${moodAvg.toFixed(1)}/5 ${moodLabel}
+
+## 📅 AGENDA
+- Hoje: ${todayEvents.length} evento(s)${todayEvents.length ? ': ' + todayEvents.map(e => e.title).join(', ') : ''}
+- Próximos: ${upcoming.length ? upcoming.map(e => `${e.date}: ${e.title}`).join(', ') : 'nenhum'}
+
+## 🎓 UFPI
+- Disciplinas: ${disciplines.length}
+
+## 📱 APP
+- Streak de uso: ${streakData.count} dias seguidos
+
+Com base nesses dados, dá um diagnóstico honesto: o que tá bem, o que precisa de atenção, e 2-3 ações concretas pra melhorar. Seja direta, sem enrolação.`;
+
+        this.openChat();
+        await new Promise(r => setTimeout(r, 300));
+        Loader.hide(100);
+        await this.handleSend(diagPrompt, { silent: true });
     }
 
     /* ── SEARCH ── */
@@ -3166,6 +3992,76 @@ class App {
             else { row.classList.add('search-hidden'); row.classList.remove('search-match'); }
         });
         document.querySelector('.msg-row.search-match')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    /* ── BUSCA GLOBAL NO APP ── */
+    openAppSearch() {
+        const bs = document.createElement('div');
+        bs.className = 'bottom-sheet';
+        bs.style.display = 'flex';
+        bs.innerHTML = `
+            <div class="bs-backdrop" onclick="this.closest('.bottom-sheet').remove()"></div>
+            <div class="bs-content">
+                <div class="bs-hdr">
+                    <div class="bs-title">BUSCAR NO APP</div>
+                    <button class="bs-close" onclick="this.closest('.bottom-sheet').remove()">×</button>
+                </div>
+                <input type="search" id="app-search-inp" placeholder="Eventos, hábitos, transações..."
+                    oninput="orbit._runAppSearch(this.value)" autocomplete="off"
+                    style="margin-bottom:12px" autofocus>
+                <div id="app-search-results"></div>
+            </div>
+        `;
+        document.body.appendChild(bs);
+        setTimeout(() => document.getElementById('app-search-inp')?.focus(), 100);
+    }
+
+    _runAppSearch(q) {
+        const el = document.getElementById('app-search-results');
+        if (!el || !q || q.length < 2) { if (el) el.innerHTML = ''; return; }
+        const results = [];
+        const ql = q.toLowerCase();
+
+        (Store.get(K.agenda, [])).forEach(e => {
+            if (e.title?.toLowerCase().includes(ql))
+                results.push({ icon: '📅', label: e.title, sub: e.date, action: `orbit.switchTab('agenda')` });
+        });
+
+        (Store.get(K.fin_tx, [])).forEach(t => {
+            if (t.desc?.toLowerCase().includes(ql))
+                results.push({ icon: t.type === 'income' ? '💚' : '🔴', label: t.desc, sub: `R$ ${t.amount}`, action: `orbit.switchTab('cofre')` });
+        });
+
+        (Habits.getAll()).forEach(h => {
+            if (h.name?.toLowerCase().includes(ql))
+                results.push({ icon: h.icon || '✅', label: h.name, sub: 'Hábito', action: `orbit.switchTab('hub');setTimeout(()=>orbit.switchHub('habitos'),200)` });
+        });
+
+        (Store.get(K.flash, [])).forEach(f => {
+            if (f.front?.toLowerCase().includes(ql) || f.back?.toLowerCase().includes(ql))
+                results.push({ icon: '🃏', label: f.front, sub: f.back?.slice(0, 40), action: `orbit.switchTab('academia')` });
+        });
+
+        if (!results.length) {
+            el.innerHTML = `<div style="color:var(--fg-4);font-size:13px;padding:8px 0">Nenhum resultado para "${q}"</div>`;
+            return;
+        }
+
+        el.innerHTML = results.slice(0, 10).map(r => `
+            <div class="search-result-item" onclick="${r.action};this.closest('.bottom-sheet').remove()">
+                <span class="sri-icon">${r.icon}</span>
+                <div class="sri-info">
+                    <div class="sri-label">${r.label}</div>
+                    ${r.sub ? `<div class="sri-sub">${r.sub}</div>` : ''}
+                </div>
+            </div>
+        `).join('');
+    }
+
+    /* ── MODO FOCO ── */
+    toggleFocusMode() {
+        const isFocus = document.body.classList.toggle('focus-mode');
+        UI.toast(isFocus ? '🎯 Modo foco ativado' : '📱 Modo normal', 'info', 1500);
     }
 
     scrollBottom() { const msgs = document.getElementById('msgs'); if (msgs) msgs.scrollTop = msgs.scrollHeight; }
@@ -3350,6 +4246,10 @@ class App {
                 <div class="psec"><label class="plabel">Modelo Groq</label><select id="s-groq-model">
                     <option value="llama-3.3-70b-versatile" ${cfg.groqModel==='llama-3.3-70b-versatile'?'selected':''}>LLaMA 3.3 70B Versatile (recomendado)</option>
                     <option value="llama-3.1-8b-instant" ${cfg.groqModel==='llama-3.1-8b-instant'?'selected':''}>LLaMA 3.1 8B Instant (mais rápido)</option>
+                    <option value="compound-beta" ${cfg.groqModel==='compound-beta'?'selected':''}>⚡ Compound Beta (web search nativa — experimental)</option>
+                    <option value="llama-3.3-70b-specdec" ${cfg.groqModel==='llama-3.3-70b-specdec'?'selected':''}>🚀 LLaMA 3.3 70B SpecDec (mais rápido)</option>
+                    <option value="deepseek-r1-distill-llama-70b" ${cfg.groqModel==='deepseek-r1-distill-llama-70b'?'selected':''}>🧠 DeepSeek R1 Distill 70B (raciocínio)</option>
+                    <option value="gemma2-9b-it" ${cfg.groqModel==='gemma2-9b-it'?'selected':''}>🪶 Gemma 2 9B (ultra leve)</option>
                     <option value="mixtral-8x7b-32768" ${cfg.groqModel==='mixtral-8x7b-32768'?'selected':''}>Mixtral 8x7B</option>
                 </select></div>
                 <div style="height:1px;background:var(--border);margin:16px 0"></div>
@@ -3661,7 +4561,15 @@ class App {
                     // Recoloca o foco no próximo tick (alguns Androids tiram durante o handler)
                     setTimeout(() => inp.focus(), 0);
                 }
-                if (e.key === 'Escape') this.hideCmdPalette();
+                if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+                    e.preventDefault();
+                    this.showCmdPalette();
+                }
+                if (e.key === 'Escape') {
+                    const pal = document.getElementById('cmd-palette');
+                    if (pal && pal.style.display !== 'none') this.hideCmdPalette();
+                    else if (this.abortCtrl) this.cancelStream();
+                }
             });
             inp.addEventListener('input', () => this.handleInput());
             // Se o textarea perder foco logo após enviar (Android), retoma
