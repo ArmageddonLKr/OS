@@ -882,6 +882,57 @@ class App {
         this._renderTxList();
         this.renderFinanceCard();
         this._renderFinChart(s);
+        this._renderBudgets();
+    }
+
+    _renderBudgets() {
+        const list = document.getElementById('fin-budgets-list');
+        if (!list) return;
+        const progress = Finance.getBudgetProgress(this._finYear, this._finMonth);
+        if (!progress.length) {
+            list.innerHTML = '<div class="fin-budgets-empty">Nenhuma meta definida ainda.</div>';
+            return;
+        }
+        list.innerHTML = progress.map(p => {
+            const over = p.spent > p.limit;
+            return `<div class="fin-budget-row">
+                <div class="fin-budget-top">
+                    <span class="fin-budget-name">${p.icon} ${p.name}</span>
+                    <span class="fin-budget-vals ${over ? 'fin-budget-over' : ''}">${Finance.fmt(p.spent)} / ${Finance.fmt(p.limit)}</span>
+                    <button class="fin-budget-del" onclick="orbit.removeBudget('${p.id}')">×</button>
+                </div>
+                <div class="fin-budget-bar"><div class="fin-budget-fill ${over ? 'fin-budget-over' : ''}" style="width:${p.pct}%"></div></div>
+            </div>`;
+        }).join('');
+    }
+
+    toggleBudgetForm() {
+        const form = document.getElementById('fin-budget-form');
+        if (!form) return;
+        const show = form.style.display === 'none';
+        form.style.display = show ? 'flex' : 'none';
+        if (show) {
+            const sel = document.getElementById('budget-cat-sel');
+            const existing = Object.keys(Finance.getBudgets());
+            sel.innerHTML = FIN_CATS.filter(c => c.type === 'expense' && !existing.includes(c.id))
+                .map(c => `<option value="${c.id}">${c.icon} ${c.name}</option>`).join('');
+        }
+    }
+
+    saveBudget() {
+        const catId = document.getElementById('budget-cat-sel')?.value;
+        const amount = parseFloat(document.getElementById('budget-amount-inp')?.value);
+        if (!catId || !amount || amount <= 0) return UI.toast('Escolha a categoria e um valor válido.', 'err');
+        Finance.setBudget(catId, amount);
+        document.getElementById('budget-amount-inp').value = '';
+        document.getElementById('fin-budget-form').style.display = 'none';
+        this._renderBudgets();
+        UI.toast('Meta salva!', 'ok');
+    }
+
+    removeBudget(catId) {
+        Finance.removeBudget(catId);
+        this._renderBudgets();
     }
 
     finPrevMonth() {
@@ -1342,6 +1393,10 @@ class App {
             };
             const [sLabel, sCls] = statusMap[status] || ['—', 'cursando'];
             const maxFaltas = Math.floor((g.cargaHoraria || 60) * 0.25);
+            const needed = status === 'cursando' ? Grades.neededGrade(g.notas, 7) : null;
+            const neededHint = needed === null ? '' : needed > 10
+                ? `<div class="ufpi-needed ufpi-needed-bad">precisa de ${needed} pra passar direto — só na final mesmo</div>`
+                : `<div class="ufpi-needed">precisa tirar <strong>${needed}</strong> pra fechar com média 7</div>`;
 
             return `<div class="ufpi-disc">
                 <div class="ufpi-disc-top">
@@ -1359,6 +1414,7 @@ class App {
                         <button class="ufpi-falta-btn" onclick="orbit.changeFaltas('${g.discId}',1)">+</button>
                     </div>
                 </div>
+                ${neededHint}
             </div>`;
         }).join('');
     }
@@ -2835,6 +2891,7 @@ class App {
             history.push({ role: 'assistant', content: fullResponse });
             Store.saveMsgsToConv(convId, history);
             if (onSameConv()) this._updateConvTitle();
+            if (onSameConv()) this._addQuickReplies(sophyRow, fullResponse);
 
             if (history.length % 24 === 0) AI.summarizeSession(history);
             if (history.length % 8 === 0) this._updateOrbitPrefs();
@@ -2892,6 +2949,40 @@ class App {
 
     cancelStream() {
         if (this.abortCtrl) { this.abortCtrl.abort(); this.abortCtrl = null; }
+    }
+
+    /* ── QUICK REPLIES ── */
+    _addQuickReplies(row, responseText) {
+        if (!row || !responseText || responseText.length < 12) return;
+        const bubble = row.querySelector('.mbubble');
+        if (!bubble) return;
+        const wrap = document.createElement('div');
+        wrap.className = 'quick-replies';
+        wrap.innerHTML = `
+            <button class="qr-chip" onclick="orbit._qrSave(this)">🧠 Guardar</button>
+            <button class="qr-chip" onclick="orbit._qrMore(this)">🔁 Mais detalhes</button>
+        `;
+        bubble.appendChild(wrap);
+    }
+
+    _qrSave(btn) {
+        const bubble = btn.closest('.mbubble');
+        const txt = bubble?.querySelector('.m-content')?.innerText?.trim();
+        if (!txt) return;
+        const ep = Store.getEp();
+        ep.push({ d: AI.dateStrBR(), s: txt.slice(0, 250) });
+        Store.saveEp(ep);
+        UI.toast('Guardado na memória 🧠', 'ok');
+        btn.closest('.quick-replies')?.remove();
+    }
+
+    _qrMore(btn) {
+        btn.closest('.quick-replies')?.remove();
+        if (this.busy) return;
+        const inp = document.getElementById('msginput');
+        if (!inp) return;
+        inp.value = 'me dá mais detalhes sobre isso';
+        this.handleSend();
     }
 
     /* ── VOICE ── */
@@ -3373,6 +3464,7 @@ class App {
             disc: University.get(), flash: Flashcards.get(),
             fe: Faith.getJournal(), ideas: IdeaVault.get(),
             finance_tx: Finance.getAll(),
+            finance_budgets: Finance.getBudgets(),
             agenda: Agenda.getEvents(),
             habits: Habits.getAll(),
             kanban: Kanban.get(),
@@ -3413,6 +3505,7 @@ class App {
                 if (d.fe) Store.set('orbit_fe_journal', d.fe);
                 if (d.ideas) Store.set('orbit_ideas', d.ideas);
                 if (d.finance_tx) Store.set('orbit_finance_tx', d.finance_tx);
+                if (d.finance_budgets) Store.set('orbit_finance_budgets', d.finance_budgets);
                 if (d.agenda) Store.set('orbit_agenda_events', d.agenda);
                 if (d.habits) Store.set('orbit_habits', d.habits);
                 if (d.kanban) Store.set('orbit_kanban', d.kanban);
