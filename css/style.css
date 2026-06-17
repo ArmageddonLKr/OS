@@ -101,9 +101,9 @@
   --d-sheet:   320ms;
 
   /* ── Tipografia ── */
-  --font-display: 'Geist Variable', 'Space Grotesk', system-ui, sans-serif;
-  --font-body:    'Geist Variable', 'Inter', system-ui, -apple-system, sans-serif;
-  --font-mono:    'JetBrains Mono', 'SF Mono', Menlo, monospace;
+  --font-display: Arial, 'Helvetica Neue', 'Liberation Sans', sans-serif;
+  --font-body:    Arial, 'Helvetica Neue', 'Liberation Sans', sans-serif;
+  --font-mono:    'JetBrains Mono', 'SF Mono', Consolas, monospace;
 
   --t-display:  28px;
   --t-h1:       22px;
@@ -435,6 +435,12 @@ body {
 .av-28 .av-r2 { inset: 4px; border-width: 1px; }
 .av-28 .av-r3 { display: none; }
 
+.av.thinking .av-core { animation: avPulseThinking 1.2s ease-in-out infinite; }
+@keyframes avPulseThinking {
+  0%, 100% { opacity: 0.6; transform: translate(-50%, -50%) scale(1); }
+  50%      { opacity: 1;   transform: translate(-50%, -50%) scale(1.1); }
+}
+
 /* ── MAIN APP ─────────────────────────────────────── */
 #app {
   position: fixed;
@@ -532,7 +538,10 @@ body {
   align-items: flex-start;
   justify-content: space-between;
   margin-bottom: 16px;
-  padding-top: 4px;
+  background: linear-gradient(135deg, rgba(212,175,55,0.06) 0%, rgba(255,255,255,0.02) 60%, transparent 100%);
+  border: 1px solid rgba(212,175,55,0.1);
+  border-radius: 16px;
+  padding: 16px;
 }
 
 .dash-greet-text { flex: 1; }
@@ -662,12 +671,15 @@ body {
 /* ── DASHBOARD CARDS ──────────────────────────────── */
 .dash-card {
   background: var(--bg-2);
-  border: 1px solid var(--line-1);
-  border-radius: var(--r-lg);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 16px;
   padding: 16px;
   margin-bottom: 10px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 4px 24px rgba(0,0,0,0.3);
   animation: cardIn var(--d-medium) var(--ease-out);
 }
+
+.dash-card:hover { border-color: rgba(255,255,255,0.13); }
 
 .dash-card-gold {
   border-color: var(--gold-line);
@@ -696,7 +708,7 @@ body {
 .dc-title {
   font-family: var(--font-mono);
   font-size: 10px;
-  letter-spacing: var(--track-eyebrow);
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--fg-4);
 }
@@ -1425,10 +1437,11 @@ select option { background: var(--raised); }
   letter-spacing: 2px;
   cursor: pointer;
   border: none;
-  transition: all 0.18s;
+  transition: all 0.18s, transform 0.1s ease, opacity 0.1s ease;
   text-align: center;
   -webkit-tap-highlight-color: transparent;
 }
+.btn:active { transform: scale(0.97); opacity: 0.9; }
 
 .btn-primary {
   background: var(--white);

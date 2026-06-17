@@ -13,7 +13,6 @@
     <title>OS</title>
 
     <link rel="preconnect" href="https://cdn.jsdelivr.net">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource-variable/geist@5.1.0/index.css">
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/modules.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.10.0/styles/github-dark.min.css">
@@ -90,12 +89,23 @@
                     <div class="dash-greet-text">
                         <div id="greet-line" class="greet-line">Bom dia, Pai</div>
                         <div id="greet-sub" class="greet-sub">Carregando...</div>
+                        <div class="dash-streak" id="dash-streak" style="display:none">🔥 <span id="streak-count">0</span> dias seguidos</div>
                     </div>
-                    <div id="greet-weather" class="greet-weather">
-                        <div id="weather-icon" class="weather-icon">☀️</div>
-                        <div class="weather-info">
-                            <div id="weather-temp" class="weather-temp">--°</div>
-                            <div id="weather-desc" class="weather-desc">Teresina</div>
+                    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+                        <div style="display:flex;gap:6px">
+                            <button class="dash-focus-btn" onclick="orbit.openAppSearch()" title="Buscar no app">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                            </button>
+                            <button class="dash-focus-btn" id="dash-focus-btn" onclick="orbit.toggleFocusMode()" title="Modo foco">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+                            </button>
+                        </div>
+                        <div id="greet-weather" class="greet-weather">
+                            <div id="weather-icon" class="weather-icon">☀️</div>
+                            <div class="weather-info">
+                                <div id="weather-temp" class="weather-temp">--°</div>
+                                <div id="weather-desc" class="weather-desc">Teresina</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -208,7 +218,7 @@
                 <button class="hdr-btn" onclick="orbit.closeChat()" title="Voltar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></button>
                 <div class="hdr-info">
                     <div class="hdr-name" id="hdr-name">OS</div>
-                    <div class="hdr-status"><span class="status-dot"></span><span id="hdr-st">online</span><span id="mode-badge"></span> <span id="hdr-conv-title" class="hdr-conv-title"></span></div>
+                    <div class="hdr-status"><span class="status-dot"></span><span id="hdr-st">online</span><span id="mode-badge"></span><span id="hdr-mood-badge" class="hdr-mood-badge" style="display:none"></span> <span id="hdr-conv-title" class="hdr-conv-title"></span></div>
                 </div>
                 <button class="hdr-btn" id="btn-convs" onclick="orbit.openConvList()" title="Conversas"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="13" y2="13"/></svg></button>
                 <button class="hdr-btn" id="btn-search" onclick="orbit.openSearch()" title="Buscar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></button>
@@ -311,6 +321,15 @@
                 </div>
                 <div id="fin-budgets-list" class="fin-budgets-list"></div>
             </div>
+            <div class="fin-bar-chart-wrap"><canvas id="fin-bar-chart" style="width:100%;height:150px;display:block"></canvas></div>
+            <div class="pareto-section" id="pareto-fin-section">
+                <div class="pareto-hdr">
+                    <span class="pareto-title">📊 Análise de Pareto — Gastos</span>
+                    <span class="pareto-sub">Quais 20% das categorias concentram 80% dos gastos</span>
+                </div>
+                <canvas id="pareto-fin-chart" style="width:100%;height:200px;display:block"></canvas>
+                <div id="pareto-fin-insight" class="pareto-insight"></div>
+            </div>
             <div class="fin-filter-row">
                 <button class="fin-filter active" id="ff-all" onclick="orbit.filterTx('all')">Todos</button>
                 <button class="fin-filter" id="ff-in" onclick="orbit.filterTx('income')">Entradas</button>
@@ -408,6 +427,7 @@
             <button class="mod-stab" id="stab-nupi" onclick="orbit.switchHub('nupi')">NUPIEEPRO</button>
             <button class="mod-stab" id="stab-fe" onclick="orbit.switchHub('fe')">Fé</button>
             <button class="mod-stab" id="stab-esportes" onclick="orbit.switchHub('esportes')">Esportes</button>
+            <button class="mod-stab" id="stab-mercado" onclick="orbit.switchHub('mercado')">🔁 Mercado</button>
         </div>
 
         <!-- Kanban -->
@@ -429,6 +449,13 @@
                 <div class="mood-week" id="mood-week"></div>
             </div>
             <div id="hab-list" class="hab-list"></div>
+            <div class="pareto-section" style="margin-top:16px">
+                <div class="pareto-hdr">
+                    <span class="pareto-title">📊 Consistência dos Hábitos</span>
+                    <span class="pareto-sub">Taxa de conclusão por hábito (últimos 30 dias)</span>
+                </div>
+                <canvas id="pareto-hab-chart" style="width:100%;height:160px;display:block"></canvas>
+            </div>
             <div class="hab-add-form">
                 <div class="plabel">Novo Hábito</div>
                 <div style="display:flex;gap:8px">
@@ -620,6 +647,37 @@
                 </div>
                 <button class="btn btn-ghost" onclick="orbit.addPS5Game()" style="margin-top:6px">ADICIONAR JOGO</button>
             </div>
+        </div>
+
+        <!-- Mercado de Transferências (estilo EA FC) -->
+        <div id="hub-mercado" class="mod-section" style="display:none">
+            <div class="mercado-filters">
+                <button class="mf-btn active" id="mf-global" onclick="orbit.mercadoFilter('global')">🌍 Mercado Global</button>
+                <button class="mf-btn" id="mf-mytime" onclick="orbit.mercadoFilter('mytime')">⭐ Meus Times</button>
+            </div>
+            <div class="mercado-leagues" id="mercado-leagues">
+                <button class="ml-btn active" data-lg="all" onclick="orbit.mercadoLeague('all')">Todas</button>
+                <button class="ml-btn" data-lg="bra.1" onclick="orbit.mercadoLeague('bra.1')">🇧🇷 Brasileirão</button>
+                <button class="ml-btn" data-lg="eng.1" onclick="orbit.mercadoLeague('eng.1')">🏴 Premier</button>
+                <button class="ml-btn" data-lg="esp.1" onclick="orbit.mercadoLeague('esp.1')">🇪🇸 La Liga</button>
+                <button class="ml-btn" data-lg="ita.1" onclick="orbit.mercadoLeague('ita.1')">🇮🇹 Serie A</button>
+                <button class="ml-btn" data-lg="ger.1" onclick="orbit.mercadoLeague('ger.1')">🇩🇪 Bundesliga</button>
+                <button class="ml-btn" data-lg="fra.1" onclick="orbit.mercadoLeague('fra.1')">🇫🇷 Ligue 1</button>
+            </div>
+            <div class="mercado-sort-row">
+                <span class="mercado-sort-label">Ordenar:</span>
+                <button class="ms-btn active" id="ms-date" onclick="orbit.mercadoSort('date')">Data</button>
+                <button class="ms-btn" id="ms-fee" onclick="orbit.mercadoSort('fee')">Valor</button>
+                <button class="ms-btn" id="ms-name" onclick="orbit.mercadoSort('name')">Nome</button>
+            </div>
+            <div class="mercado-table-hdr">
+                <span class="mth-date">Data</span>
+                <span class="mth-player">Jogador</span>
+                <span class="mth-clubs">Transferência</span>
+                <span class="mth-fee">Valor</span>
+            </div>
+            <div id="mercado-list" class="mercado-list"></div>
+            <button id="mercado-load-more" class="btn btn-ghost" style="margin:12px 16px;display:none" onclick="orbit.mercadoLoadMore()">Carregar mais</button>
         </div>
     </div>
 

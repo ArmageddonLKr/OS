@@ -294,16 +294,88 @@ export class Entertainment {
         const norm = (t) => ({
             name: t.name || t.player_name || t.playerName || t.player?.name || '?',
             position: t.position || t.player?.position || t.role || '',
-            from: t.from?.name || t.from_club_name || t.left_team?.name || t.club_from?.name || t.fromClub || '?',
-            to:   t.to?.name   || t.to_club_name   || t.joined_team?.name || t.club_to?.name   || t.toClub   || '?',
+            from: t.from?.name || t.from_club_name || t.fromClubName || t.left_team?.name || t.club_from?.name || t.fromClub || '?',
+            fromImg: t.from?.image || t.fromClubImage || t.from?.logo || '',
+            to:   t.to?.name   || t.to_club_name   || t.toClubName   || t.joined_team?.name || t.club_to?.name   || t.toClub   || '?',
+            toImg: t.to?.image || t.toClubImage || t.to?.logo || '',
             fee: t.fee || t.transfer_fee || t.transferFee || t.cost || '—',
-            market_value: t.market_value || t.marketValue || t.value || ''
+            market_value: t.market_value || t.marketValue || t.value || '',
+            date: t.date || t.transfer_date || t.transferDate || t.dateUnix || t.date_unix || null
         });
 
         return {
             arrivals:   arrivalsRaw.slice(0, 14).map(norm),
             departures: departuresRaw.slice(0, 14).map(norm)
         };
+    }
+
+    /* ── Mercado global: agrega transferências de clubes-top por liga ── */
+    static _LEAGUE_CLUBS = {
+        'bra.1': ['614', '1023', '199', '585', '221', '210', '6600', '330'],
+        'eng.1': ['281', '985', '31', '11', '631', '148', '762'],
+        'esp.1': ['418', '131', '13', '1043'],
+        'ita.1': ['506', '46', '5', '6195'],
+        'ger.1': ['27', '16', '41'],
+        'fra.1': ['583', '591', '273']
+    };
+
+    static async getGlobalTransfers(league = 'all') {
+        const key = `ent_global_tm_${league}`;
+        const hit = scGet(key);
+        if (hit) return hit;
+
+        const entries = league === 'all'
+            ? Object.entries(this._LEAGUE_CLUBS).flatMap(([lg, ids]) => ids.slice(0, 4).map(id => [lg, id]))
+            : (this._LEAGUE_CLUBS[league] || []).map(id => [league, id]);
+
+        const results = await Promise.allSettled(
+            entries.map(([lg, id]) => this.getTeamTransfers(id).then(d => ({ lg, d })))
+        );
+
+        const all = [];
+        for (const r of results) {
+            if (r.status !== 'fulfilled' || !r.value.d) continue;
+            const { lg, d } = r.value;
+            for (const a of d.arrivals || []) all.push({ ...a, league: lg, direction: 'in' });
+            for (const dep of d.departures || []) all.push({ ...dep, league: lg, direction: 'out' });
+        }
+
+        const seen = new Set();
+        const uniq = all.filter(t => {
+            const k = `${t.name}|${t.from}|${t.to}`;
+            if (seen.has(k)) return false;
+            seen.add(k);
+            return true;
+        });
+
+        scSet(key, uniq);
+        return uniq;
+    }
+
+    /* ── Transferências dos times que o usuário segue ── */
+    static async getMyTeamsTransfers() {
+        const teams = this.getTeams().filter(t => t.tmId);
+        if (!teams.length) return [];
+
+        const results = await Promise.allSettled(
+            teams.map(t => this.getTeamTransfers(t.tmId).then(d => ({ t, d })))
+        );
+
+        const all = [];
+        for (const r of results) {
+            if (r.status !== 'fulfilled' || !r.value.d) continue;
+            const { t, d } = r.value;
+            for (const a of d.arrivals || []) all.push({ ...a, league: t.espnLeague || '', direction: 'in' });
+            for (const dep of d.departures || []) all.push({ ...dep, league: t.espnLeague || '', direction: 'out' });
+        }
+
+        const seen = new Set();
+        return all.filter(t => {
+            const k = `${t.name}|${t.from}|${t.to}`;
+            if (seen.has(k)) return false;
+            seen.add(k);
+            return true;
+        });
     }
 
     /* ── Wikipedia URL fallback p/ transferências ──── */

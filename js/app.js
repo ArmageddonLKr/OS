@@ -915,6 +915,8 @@ class App {
         this._renderTxList();
         this.renderFinanceCard();
         this._renderFinChart(s);
+        this._renderFinBarChart();
+        this._renderParetoFin(s.txs);
         this._renderBudgets();
     }
 
@@ -991,7 +993,97 @@ class App {
 
         const dpr = window.devicePixelRatio || 1;
         const W = canvas.offsetWidth || 320;
-        const H = 180;
+        const H = 200;
+        canvas.width = W * dpr;
+        canvas.height = H * dpr;
+        canvas.style.height = H + 'px';
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+
+        const COLORS = ['#d4af37','#4a9eff','#4ad08a','#ff6b6b','#a78bfa','#f59e0b','#06b6d4'];
+        const cx = W * 0.28, cy = H / 2;
+        const r = Math.min(cy - 14, W * 0.24);
+        const total = byCat.reduce((a, b) => a + b.total, 0);
+        const slices = byCat.slice(0, 7);
+
+        if (canvas._finChartRAF) cancelAnimationFrame(canvas._finChartRAF);
+        let progress = 0;
+        const animate = () => {
+            ctx.clearRect(0, 0, W, H);
+            progress = Math.min(progress + 0.06, 1);
+            const ease = 1 - Math.pow(1 - progress, 3);
+
+            let angle = -Math.PI / 2;
+            slices.forEach((cat, i) => {
+                const slice = (cat.total / total) * Math.PI * 2 * ease;
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                ctx.arc(cx, cy, r, angle, angle + slice);
+                ctx.closePath();
+                ctx.fillStyle = COLORS[i % COLORS.length];
+                ctx.fill();
+                angle += slice;
+            });
+
+            ctx.beginPath();
+            ctx.arc(cx, cy, r * 0.52, 0, Math.PI * 2);
+            ctx.fillStyle = '#080808';
+            ctx.fill();
+
+            if (progress >= 0.95) {
+                ctx.textAlign = 'center';
+                ctx.fillStyle = 'rgba(255,255,255,0.9)';
+                ctx.font = `700 13px Arial, sans-serif`;
+                ctx.fillText(Finance.fmt(total), cx, cy + 5);
+                ctx.fillStyle = 'rgba(255,255,255,0.4)';
+                ctx.font = `10px Arial, sans-serif`;
+                ctx.fillText('GASTOS', cx, cy - 9);
+            }
+
+            const lx = W * 0.56;
+            ctx.textAlign = 'left';
+            byCat.slice(0, Math.min(5, byCat.length)).forEach((cat, i) => {
+                const y = 20 + i * 36;
+                ctx.fillStyle = COLORS[i % COLORS.length];
+                ctx.beginPath();
+                ctx.arc(lx + 5, y - 3, 5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = 'rgba(255,255,255,0.5)';
+                ctx.font = `10px Arial, sans-serif`;
+                ctx.fillText(cat.name.slice(0, 11), lx + 14, y);
+                ctx.fillStyle = 'rgba(255,255,255,0.85)';
+                ctx.font = `600 12px Arial, sans-serif`;
+                ctx.fillText(Finance.fmt(cat.total), lx + 14, y + 14);
+                ctx.fillStyle = 'rgba(255,255,255,0.35)';
+                ctx.font = `9px Arial, sans-serif`;
+                ctx.fillText(`${Math.round((cat.total / total) * 100)}%`, lx + 14, y + 26);
+            });
+
+            if (progress < 1) canvas._finChartRAF = requestAnimationFrame(animate);
+        };
+        canvas._finChartRAF = requestAnimationFrame(animate);
+    }
+
+    _renderFinBarChart() {
+        const canvas = document.getElementById('fin-bar-chart');
+        if (!canvas) return;
+
+        const months = [];
+        for (let i = 5; i >= 0; i--) {
+            const d = new Date();
+            d.setMonth(d.getMonth() - i);
+            const y = d.getFullYear(), m = d.getMonth() + 1;
+            const txs = Finance.getMonth(y, m);
+            months.push({
+                label: MONTHS_PT[m - 1].slice(0, 3),
+                income: txs.filter(t => t.type === 'income').reduce((a, b) => a + (b.amount || 0), 0),
+                expense: txs.filter(t => t.type === 'expense').reduce((a, b) => a + (b.amount || 0), 0)
+            });
+        }
+
+        const dpr = window.devicePixelRatio || 1;
+        const W = canvas.offsetWidth || 320;
+        const H = 150;
         canvas.width = W * dpr;
         canvas.height = H * dpr;
         canvas.style.height = H + 'px';
@@ -999,42 +1091,209 @@ class App {
         ctx.scale(dpr, dpr);
         ctx.clearRect(0, 0, W, H);
 
-        const COLORS = ['#c9982a','#4a9eff','#4ad08a','#ff5a5a','#a78bfa','#f59e0b'];
-        const cx = W * 0.27, cy = H / 2, r = Math.min(cy - 12, W * 0.22);
-        const total = byCat.reduce((a, b) => a + b.total, 0);
-        let angle = -Math.PI / 2;
+        const maxVal = Math.max(...months.map(m => Math.max(m.income, m.expense)), 1);
+        const pad = { l: 8, r: 8, t: 10, b: 22 };
+        const chartH = H - pad.t - pad.b;
+        const groupW = (W - pad.l - pad.r) / months.length;
+        const barW = groupW * 0.28;
 
-        byCat.slice(0, 6).forEach((cat, i) => {
-            const slice = (cat.total / total) * Math.PI * 2;
+        months.forEach((m, i) => {
+            const x = pad.l + i * groupW + groupW * 0.1;
+            const ih = (m.income / maxVal) * chartH;
+            ctx.fillStyle = 'rgba(74,208,138,0.75)';
             ctx.beginPath();
-            ctx.moveTo(cx, cy);
-            ctx.arc(cx, cy, r, angle, angle + slice);
-            ctx.closePath();
-            ctx.fillStyle = COLORS[i % COLORS.length];
+            ctx.roundRect(x, pad.t + chartH - ih, barW, ih, [3, 3, 0, 0]);
             ctx.fill();
-            angle += slice;
+            const eh = (m.expense / maxVal) * chartH;
+            ctx.fillStyle = 'rgba(255,90,90,0.75)';
+            ctx.beginPath();
+            ctx.roundRect(x + barW + 2, pad.t + chartH - eh, barW, eh, [3, 3, 0, 0]);
+            ctx.fill();
+            ctx.fillStyle = 'rgba(255,255,255,0.35)';
+            ctx.font = '9px Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(m.label, x + barW + 1, H - 6);
         });
 
-        ctx.beginPath();
-        ctx.arc(cx, cy, r * 0.54, 0, Math.PI * 2);
-        ctx.fillStyle = '#080808';
-        ctx.fill();
-
-        ctx.font = `600 11px 'Geist Variable', sans-serif`;
+        ctx.fillStyle = 'rgba(74,208,138,0.8)';
+        ctx.fillRect(pad.l, pad.t, 8, 8);
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.font = '10px Arial, sans-serif';
         ctx.textAlign = 'left';
-        const lx = W * 0.54;
-        byCat.slice(0, 5).forEach((cat, i) => {
-            const y = 22 + i * 32;
+        ctx.fillText('Entradas', pad.l + 12, pad.t + 8);
+        ctx.fillStyle = 'rgba(255,90,90,0.8)';
+        ctx.fillRect(pad.l + 80, pad.t, 8, 8);
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.fillText('Saídas', pad.l + 92, pad.t + 8);
+    }
+
+    _renderParetoFin(txs) {
+        const canvas = document.getElementById('pareto-fin-chart');
+        if (!canvas) return;
+
+        const expenses = (txs || []).filter(t => t.type === 'expense');
+        const insight = document.getElementById('pareto-fin-insight');
+        if (expenses.length < 2) {
+            canvas.style.display = 'none';
+            if (insight) insight.innerHTML = '';
+            return;
+        }
+        canvas.style.display = 'block';
+
+        const byCat = Finance.byCategory(expenses);
+        const total = byCat.reduce((a, b) => a + b.total, 0);
+        if (!total) return;
+
+        const sorted = [...byCat].sort((a, b) => b.total - a.total);
+        const dpr = window.devicePixelRatio || 1;
+        const W = canvas.offsetWidth || 320;
+        const H = 200;
+        canvas.width = W * dpr;
+        canvas.height = H * dpr;
+        canvas.style.height = H + 'px';
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        ctx.clearRect(0, 0, W, H);
+
+        const pad = { l: 8, r: 8, t: 16, b: 40 };
+        const chartW = W - pad.l - pad.r;
+        const chartH = H - pad.t - pad.b;
+        const barW = (chartW / sorted.length) - 4;
+
+        const COLORS = ['#d4af37', '#4a9eff', '#4ad08a', '#ff6b6b', '#a78bfa', '#f59e0b', '#06b6d4'];
+
+        const maxVal = sorted[0].total;
+        sorted.forEach((cat, i) => {
+            const x = pad.l + i * (barW + 4);
+            const h = (cat.total / maxVal) * chartH;
+            const y = pad.t + chartH - h;
+
             ctx.fillStyle = COLORS[i % COLORS.length];
+            ctx.globalAlpha = 0.85;
             ctx.beginPath();
-            ctx.roundRect(lx, y - 8, 8, 8, 2);
+            ctx.roundRect(x, y, barW, h, [4, 4, 0, 0]);
             ctx.fill();
-            ctx.fillStyle = 'rgba(255,255,255,0.55)';
-            ctx.font = `10px 'Geist Variable', sans-serif`;
-            ctx.fillText(cat.name.slice(0, 12), lx + 12, y);
-            ctx.fillStyle = 'rgba(255,255,255,0.82)';
-            ctx.font = `600 12px 'JetBrains Mono', monospace`;
-            ctx.fillText(Finance.fmt(cat.total), lx + 12, y + 15);
+            ctx.globalAlpha = 1;
+
+            ctx.fillStyle = 'rgba(255,255,255,0.4)';
+            ctx.font = '9px Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(cat.name.slice(0, 6), x + barW / 2, H - 26);
+
+            ctx.fillStyle = 'rgba(255,255,255,0.7)';
+            ctx.font = '8px Arial, sans-serif';
+            const pct = Math.round((cat.total / total) * 100);
+            ctx.fillText(`${pct}%`, x + barW / 2, y - 4);
+        });
+
+        let cumPct = 0;
+        const linePts = sorted.map((cat, i) => {
+            cumPct += (cat.total / total) * 100;
+            const x = pad.l + i * (barW + 4) + barW / 2;
+            const y = pad.t + chartH - (Math.min(cumPct, 100) / 100) * chartH;
+            return { x, y, pct: cumPct };
+        });
+
+        const p80idx = linePts.findIndex(p => p.pct >= 80);
+        if (p80idx >= 0) {
+            ctx.strokeStyle = 'rgba(212,175,55,0.4)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 3]);
+            ctx.beginPath();
+            ctx.moveTo(linePts[p80idx].x, pad.t);
+            ctx.lineTo(linePts[p80idx].x, pad.t + chartH);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+
+        ctx.beginPath();
+        ctx.moveTo(linePts[0].x, linePts[0].y);
+        linePts.slice(1).forEach(p => ctx.lineTo(p.x, p.y));
+        ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        linePts.forEach(p => {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+            ctx.fillStyle = '#fff';
+            ctx.fill();
+        });
+
+        ctx.fillStyle = 'rgba(255,255,255,0.25)';
+        ctx.font = '9px Arial, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText('80%', W - pad.r, pad.t + chartH * 0.2 + 4);
+
+        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        const y80 = pad.t + chartH - (80 / 100) * chartH;
+        ctx.moveTo(pad.l, y80);
+        ctx.lineTo(W - pad.r, y80);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        if (insight && p80idx >= 0) {
+            const topCats = sorted.slice(0, p80idx + 1).map(c => c.name).join(', ');
+            const pctCats = Math.round(((p80idx + 1) / sorted.length) * 100);
+            insight.innerHTML = `<span class="pi-highlight">${p80idx + 1} categoria${p80idx > 0 ? 's' : ''}</span> (${pctCats}% do total) concentram 80% dos seus gastos: <em>${topCats}</em>`;
+        }
+    }
+
+    _renderParetoHab() {
+        const canvas = document.getElementById('pareto-hab-chart');
+        if (!canvas) return;
+        const habits = Habits.getAll();
+        if (!habits.length) { canvas.style.display = 'none'; return; }
+        canvas.style.display = 'block';
+
+        const rates = habits.map(h => {
+            const last30 = Habits.getLast30(h);
+            const done = last30.filter(d => d.done).length;
+            return { name: h.icon + ' ' + h.name, rate: Math.round((done / 30) * 100) };
+        }).sort((a, b) => b.rate - a.rate);
+
+        const dpr = window.devicePixelRatio || 1;
+        const W = canvas.offsetWidth || 300;
+        const H = 160;
+        canvas.width = W * dpr;
+        canvas.height = H * dpr;
+        canvas.style.height = H + 'px';
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        ctx.clearRect(0, 0, W, H);
+
+        const pad = { l: 8, r: 8, t: 10, b: 36 };
+        const chartW = W - pad.l - pad.r;
+        const chartH = H - pad.t - pad.b;
+        const barW = (chartW / rates.length) - 3;
+
+        rates.forEach((h, i) => {
+            const x = pad.l + i * (barW + 3);
+            const barH = (h.rate / 100) * chartH;
+            const y = pad.t + chartH - barH;
+
+            const green = Math.round((h.rate / 100) * 160);
+            ctx.fillStyle = `rgba(${80 - Math.round(h.rate * 0.3)},${100 + green},${80},0.8)`;
+            ctx.beginPath();
+            ctx.roundRect(x, y, barW, barH, [3, 3, 0, 0]);
+            ctx.fill();
+
+            ctx.fillStyle = 'rgba(255,255,255,0.6)';
+            ctx.font = '8px Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${h.rate}%`, x + barW / 2, y - 3);
+
+            ctx.save();
+            ctx.translate(x + barW / 2, H - 4);
+            ctx.rotate(-0.6);
+            ctx.fillStyle = 'rgba(255,255,255,0.35)';
+            ctx.font = '9px Arial, sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillText(h.name.slice(0, 10), 0, 0);
+            ctx.restore();
         });
     }
 
@@ -1630,7 +1889,7 @@ class App {
         document.querySelectorAll('#tab-hub .mod-stab').forEach(b => b.classList.remove('active'));
         document.getElementById(`stab-${sec}`)?.classList.add('active');
 
-        const sections = ['kanban','habitos','tools','nupi','fe','esportes'];
+        const sections = ['kanban','habitos','tools','nupi','fe','esportes','mercado'];
         sections.forEach(s => {
             const el = document.getElementById(`hub-${s}`);
             if (el) el.style.display = s === sec ? '' : 'none';
@@ -1642,6 +1901,7 @@ class App {
         else if (sec === 'nupi') this.renderHubNupi();
         else if (sec === 'fe') this.renderHubFe();
         else if (sec === 'esportes') this.renderHubEsportes();
+        else if (sec === 'mercado') this.renderHubMercado();
     }
 
     renderHubNupi() {
@@ -1805,6 +2065,8 @@ class App {
                 </div>`;
             }).join('');
         }
+
+        this._renderParetoHab();
 
         const ideasList = document.getElementById('ideas-list');
         if (ideasList && document.getElementById('hub-tools')?.style.display === '') {
@@ -2348,6 +2610,195 @@ class App {
                 <a href="${tmURL}" target="_blank" rel="noopener" style="font-size:11px;color:var(--fg-4);text-decoration:underline">Ver mais no Transfermarkt</a>
             </div>
         </div>`;
+    }
+
+    /* ═══════════════════════════════════════════════
+       HUB · MERCADO DE TRANSFERÊNCIAS (estilo EA FC)
+       ═══════════════════════════════════════════════ */
+    async renderHubMercado() {
+        if (!this._mercadoFilter) this._mercadoFilter = 'global';
+        if (!this._mercadoLeague) this._mercadoLeague = 'all';
+        if (!this._mercadoSort) this._mercadoSort = 'date';
+        this._mercadoPage = 1;
+        await this._loadMercadoData();
+    }
+
+    async _loadMercadoData() {
+        this._renderMercadoSkeleton();
+        const data = this._mercadoFilter === 'mytime'
+            ? await Entertainment.getMyTeamsTransfers()
+            : await Entertainment.getGlobalTransfers(this._mercadoLeague);
+        this._mercadoData = data || [];
+        this._renderMercadoList();
+    }
+
+    _renderMercadoSkeleton() {
+        const el = document.getElementById('mercado-list');
+        if (!el) return;
+        const btn = document.getElementById('mercado-load-more');
+        if (btn) btn.style.display = 'none';
+        el.innerHTML = [1,2,3,4,5,6].map(() => `
+            <div class="mercado-sk-row">
+                <div class="mercado-sk-circle"></div>
+                <div class="mercado-sk-line" style="width:70%"></div>
+                <div class="mercado-sk-line" style="width:60%"></div>
+                <div class="mercado-sk-line" style="width:40px;margin-left:auto"></div>
+            </div>
+        `).join('');
+    }
+
+    mercadoFilter(f) {
+        this._mercadoFilter = f;
+        document.getElementById('mf-global')?.classList.toggle('active', f === 'global');
+        document.getElementById('mf-mytime')?.classList.toggle('active', f === 'mytime');
+        const leaguesEl = document.getElementById('mercado-leagues');
+        if (leaguesEl) leaguesEl.style.display = f === 'mytime' ? 'none' : '';
+        this.renderHubMercado();
+    }
+
+    mercadoLeague(lg) {
+        this._mercadoLeague = lg;
+        document.querySelectorAll('.ml-btn').forEach(b => b.classList.toggle('active', b.dataset.lg === lg));
+        this.renderHubMercado();
+    }
+
+    mercadoSort(s) {
+        this._mercadoSort = s;
+        document.querySelectorAll('.ms-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(`ms-${s}`)?.classList.add('active');
+        this._mercadoPage = 1;
+        this._renderMercadoList();
+    }
+
+    mercadoLoadMore() {
+        this._mercadoPage++;
+        this._renderMercadoList();
+    }
+
+    _renderMercadoList() {
+        const el = document.getElementById('mercado-list');
+        const btn = document.getElementById('mercado-load-more');
+        if (!el) return;
+
+        let list = this._mercadoLeague !== 'all' && this._mercadoFilter === 'mytime'
+            ? this._mercadoData.filter(t => t.league === this._mercadoLeague)
+            : this._mercadoData.slice();
+
+        const sortFn = {
+            date: (a, b) => this._dateMs(b.date) - this._dateMs(a.date),
+            fee:  (a, b) => this._parseFee(b.fee) - this._parseFee(a.fee),
+            name: (a, b) => (a.name || '').localeCompare(b.name || '')
+        }[this._mercadoSort] || (() => 0);
+        list = list.sort(sortFn);
+
+        if (!list.length) {
+            el.innerHTML = `<div style="padding:30px 16px;text-align:center;color:var(--fg-4);font-size:13px">
+                Nenhuma transferência encontrada agora.
+            </div>`;
+            if (btn) btn.style.display = 'none';
+            return;
+        }
+
+        const pageSize = 20;
+        const visible = list.slice(0, this._mercadoPage * pageSize);
+        this._mercadoVisible = visible;
+        el.innerHTML = visible.map((t, i) => this._buildTransferCard(t, i)).join('');
+        if (btn) btn.style.display = visible.length < list.length ? '' : 'none';
+    }
+
+    _buildTransferCard(t, i) {
+        const dateStr = this._formatTransferDate(t.date);
+        const feeInfo = this._formatFee(t.fee);
+        const crest = (name) => name && name !== '?'
+            ? `<div class="mc-crest-ph">${name.slice(0, 2).toUpperCase()}</div>`
+            : `<div class="mc-crest-ph">?</div>`;
+        const [first, ...rest] = (t.name || '?').split(' ');
+        const last = rest.join(' ') || first;
+
+        return `<div class="mercado-card" onclick="orbit.openTransferDetail(${i})">
+            <div class="mc-date">${dateStr}</div>
+            <div class="mc-player">
+                <div class="mc-avatar">👤</div>
+                <div class="mc-name-wrap">
+                    <div class="mc-first">${rest.length ? first : ''}</div>
+                    <div class="mc-last">${last}</div>
+                    ${t.position ? `<div class="mc-pos">${t.position}</div>` : ''}
+                </div>
+            </div>
+            <div class="mc-clubs">
+                ${crest(t.from)}
+                <span class="mc-arrow">→</span>
+                ${crest(t.to)}
+            </div>
+            <div class="mc-fee ${feeInfo.cls}">${feeInfo.label}</div>
+        </div>`;
+    }
+
+    openTransferDetail(i) {
+        const t = this._mercadoVisible?.[i];
+        if (!t) return;
+        const feeInfo = this._formatFee(t.fee);
+        const overlay = document.createElement('div');
+        overlay.className = 'mercado-detail';
+        overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+        overlay.innerHTML = `<div class="mercado-detail-content">
+            <div class="md-player-row">
+                <div class="md-avatar-lg">👤</div>
+                <div class="md-player-info">
+                    <h3>${t.name}</h3>
+                    <p>${t.position || ''}${t.position ? ' · ' : ''}${this._formatTransferDate(t.date, true)}</p>
+                </div>
+            </div>
+            <div class="md-transfer-visual">
+                <div class="md-club"><div class="mc-crest-ph">${(t.from || '?').slice(0,2).toUpperCase()}</div><span class="md-club-name">${t.from || '?'}</span></div>
+                <div class="md-arrow-big">→</div>
+                <div class="md-club"><div class="mc-crest-ph">${(t.to || '?').slice(0,2).toUpperCase()}</div><span class="md-club-name">${t.to || '?'}</span></div>
+            </div>
+            <div class="md-fee-big ${feeInfo.cls}">${feeInfo.label}</div>
+            <div class="md-fee-label">Valor da transferência</div>
+        </div>`;
+        document.body.appendChild(overlay);
+    }
+
+    _dateMs(d) {
+        if (!d) return 0;
+        if (typeof d === 'number') return d > 1e12 ? d : d * 1000;
+        const parsed = Date.parse(d);
+        return isNaN(parsed) ? 0 : parsed;
+    }
+
+    _formatTransferDate(d, full = false) {
+        const ms = this._dateMs(d);
+        if (!ms) return full ? '—' : '—\n—';
+        const date = new Date(ms);
+        if (full) return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
+        const day = date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }).replace('.', '');
+        const year = date.getFullYear();
+        return `${day}<span>${year}</span>`;
+    }
+
+    _parseFee(fee) {
+        if (fee == null) return -1;
+        if (typeof fee === 'number') return fee;
+        const s = String(fee).toLowerCase();
+        if (s.includes('loan') || s.includes('empr')) return -2;
+        if (s.includes('free') || s.includes('livre') || s === '-' || s === '—') return -3;
+        const m = s.match(/([\d.,]+)\s*(m|mil|k|bn|b)?/);
+        if (!m) return -1;
+        let n = parseFloat(m[1].replace(/\./g, '').replace(',', '.'));
+        const unit = m[2];
+        if (unit === 'm') n *= 1e6;
+        else if (unit === 'k' || unit === 'mil') n *= 1e3;
+        else if (unit === 'bn' || unit === 'b') n *= 1e9;
+        return isNaN(n) ? -1 : n;
+    }
+
+    _formatFee(fee) {
+        if (fee == null || fee === '—' || fee === '-') return { label: '—', cls: 'unknown' };
+        const s = String(fee).toLowerCase();
+        if (s.includes('loan') || s.includes('empr')) return { label: 'Empréstimo', cls: 'loan' };
+        if (s.includes('free') || s.includes('livre')) return { label: 'Livre', cls: 'free' };
+        return { label: String(fee), cls: '' };
     }
 
     /* ── NOTÍCIAS ──────────────────────────────────── */
