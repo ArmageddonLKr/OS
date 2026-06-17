@@ -3554,10 +3554,12 @@ class App {
         const sophyRow = UI.addMsg('sophy', '', true);
         const streamEl = sophyRow.querySelector('.m-content'); // referência direta ao nó (sem id global)
         if (streamEl) streamEl.innerHTML = '<div class="typing"><div class="tdot"></div><div class="tdot"></div><div class="tdot"></div></div>';
+        Loader.show('ORBIT PENSANDO', ['Organizando contexto', 'Gerando resposta'], 800);
 
         const ctrl = new AbortController();
         this.abortCtrl = ctrl;
         let fullResponse = '';
+        let gotFirstToken = false;
         UI.setStatus('respondendo...');
 
         const onSameConv = () => Store.getCurConvId() === convId;
@@ -3599,6 +3601,7 @@ class App {
                     ], 500);
                     const found = await AI.webSearch(text, ctrl.signal);
                     Loader.hide(80);
+                    Loader.show('ORBIT PENSANDO', ['Organizando contexto', 'Gerando resposta'], 800);
                     if (found) {
                         aiMessages = [...aiMessages];
                         const last = aiMessages[aiMessages.length - 1];
@@ -3611,7 +3614,10 @@ class App {
                         }
                         UI.toast('Internet consultada 🌐', 'ok');
                     }
-                } catch (_) { Loader.hide(0); }
+                } catch (_) {
+                    Loader.hide(0);
+                    Loader.show('ORBIT PENSANDO', ['Organizando contexto', 'Gerando resposta'], 800);
+                }
                 UI.setStatus('respondendo...');
             }
 
@@ -3619,6 +3625,7 @@ class App {
                 { messages: aiMessages, signal: ctrl.signal },
                 (delta) => {
                     if (ctrl.signal.aborted) return; // ignora deltas tardios após cancelar/trocar
+                    if (!gotFirstToken) { gotFirstToken = true; Loader.hide(0); }
                     fullResponse += delta;
                     if (streamEl) streamEl.textContent = fullResponse;
                     if (onSameConv()) {
@@ -3681,6 +3688,7 @@ class App {
                 UI.toast('Falha na requisição', 'err');
             }
         } finally {
+            Loader.hide(0);
             if (this.abortCtrl === ctrl) this.abortCtrl = null;
             if (cancelBtn) cancelBtn.style.display = 'none';
             if (sendBtn) sendBtn.style.display = '';
