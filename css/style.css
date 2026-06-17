@@ -1459,6 +1459,10 @@ select option { background: var(--raised); }
   line-height: 1.5;
 }
 
+.accent-picker { display: flex; gap: 10px; }
+.accent-swatch { width: 32px; height: 32px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: transform .15s, border-color .15s; }
+.accent-swatch.active { border-color: var(--fg-1); transform: scale(1.12); }
+
 /* ── TOOLS ────────────────────────────────────────── */
 .tool-sec { margin-bottom: 22px; background: var(--raised); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
 .tool-sec-title { font-family: var(--fd); font-size: 9px; letter-spacing: 2px; color: var(--white); padding: 10px 14px 8px; border-bottom: 1px solid var(--border); background: var(--overlay); font-weight: 600; }
