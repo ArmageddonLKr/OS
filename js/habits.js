@@ -86,6 +86,11 @@ export class Habits {
         return days;
     }
 
+    static getDoneForDate(habitId, dateStr) {
+        const h = this.getAll().find(x => x.id === habitId);
+        return !!h && (h.done || []).includes(dateStr);
+    }
+
     static todayStats() {
         const all = this.getAll();
         const today = brStr();

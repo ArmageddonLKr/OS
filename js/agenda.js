@@ -68,30 +68,15 @@ export class Agenda {
         return this.getEvents().filter(e => e.date && e.date.startsWith(prefix));
     }
 
-    static getDaysWithEvents(year, month) {
-        const evts = this.getForMonth(year, month);
-        const disc = Store.get('orbit_disc', []);
-        const allEvents = this.getEvents();
-        const days = new Set(evts.map(e => parseInt(e.date.split('-')[2])));
-
+    static getEventsByDay(year, month) {
         const daysInMonth = new Date(year, month, 0).getDate();
+        const result = {};
         for (let d = 1; d <= daysInMonth; d++) {
-            const date = new Date(year, month - 1, d);
-            const dow = date.getDay();
-            const dom = date.getDate();
-            const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-            if (disc.some(di => di.days && di.days.includes(dow))) { days.add(d); continue; }
-            for (const e of allEvents) {
-                if (!e.recurring || e.recurring === 'none' || e.date >= dateStr) continue;
-                const [ey, em, ed] = e.date.split('-').map(Number);
-                const eDate = new Date(ey, em - 1, ed);
-                if (e.recurring === 'daily') { days.add(d); break; }
-                if (e.recurring === 'weekly' && eDate.getDay() === dow) { days.add(d); break; }
-                if (e.recurring === 'monthly' && eDate.getDate() === dom) { days.add(d); break; }
-                if (e.recurring === 'yearly' && eDate.getMonth() === date.getMonth() && eDate.getDate() === dom) { days.add(d); break; }
-            }
+            const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            const evts = this.getForDate(dateStr);
+            if (evts.length) result[d] = evts;
         }
-        return days;
+        return result;
     }
 
     static getUpcoming(limit = 5) {

@@ -119,6 +119,59 @@ class App {
         }
     }
 
+    _initRipple() {
+        document.addEventListener('click', e => {
+            const btn = e.target.closest('.btn, .nav-btn, .inp-btn, .dqa-btn, .mf-btn, .ml-btn');
+            if (!btn) return;
+            const ripple = document.createElement('span');
+            ripple.className = 'ripple-fx';
+            const rect = btn.getBoundingClientRect();
+            const size = Math.max(rect.width, rect.height) * 2;
+            ripple.style.cssText = `width:${size}px;height:${size}px;left:${e.clientX - rect.left - size / 2}px;top:${e.clientY - rect.top - size / 2}px;`;
+            btn.appendChild(ripple);
+            ripple.addEventListener('animationend', () => ripple.remove());
+        });
+    }
+
+    _initPullToRefresh() {
+        const scroll = document.querySelector('.dash-scroll');
+        if (!scroll) return;
+        let startY = 0, pulling = false;
+        const indicator = document.createElement('div');
+        indicator.className = 'ptr-indicator';
+        indicator.innerHTML = '↓ Atualizando...';
+        scroll.prepend(indicator);
+
+        scroll.addEventListener('touchstart', e => {
+            if (scroll.scrollTop === 0) {
+                startY = e.touches[0].clientY;
+                pulling = true;
+            }
+        }, { passive: true });
+
+        scroll.addEventListener('touchmove', e => {
+            if (!pulling) return;
+            const dy = e.touches[0].clientY - startY;
+            if (dy > 10) {
+                indicator.style.height = Math.min(dy * 0.4, 50) + 'px';
+                indicator.style.opacity = Math.min(dy / 80, 1).toString();
+            }
+        }, { passive: true });
+
+        scroll.addEventListener('touchend', async e => {
+            if (!pulling) return;
+            pulling = false;
+            const dy = e.changedTouches[0].clientY - startY;
+            if (dy > 80) {
+                indicator.textContent = '↻ Recarregando...';
+                await this.loadDashboard();
+                UI.toast('Dashboard atualizado!', 'ok', 1500);
+            }
+            indicator.style.height = '0';
+            indicator.style.opacity = '0';
+        });
+    }
+
     setAccent(color) {
         const cfg = Store.getCfg();
         cfg.accent = color;
@@ -152,6 +205,8 @@ class App {
         this.fixViewport();
         this.initPWA();
         this.handleDeepLinks();
+        this._initRipple();
+        this._initPullToRefresh();
 
         const pin = Store.get(K.pin);
         if (!pin) {
@@ -596,13 +651,13 @@ class App {
         const fmt = Finance.fmt;
         const balEl = document.getElementById('dash-balance');
         if (balEl) {
-            balEl.textContent = fmt(s.balance);
+            UI.countUp(balEl, s.balance, 600, fmt);
             balEl.className = `dfr-val ${s.balance >= 0 ? 'finance-color' : 'danger-color'}`;
         }
         const incEl = document.getElementById('dash-income');
-        if (incEl) incEl.textContent = fmt(s.income);
+        if (incEl) UI.countUp(incEl, s.income, 500, fmt);
         const expEl = document.getElementById('dash-expenses');
-        if (expEl) expEl.textContent = fmt(s.expenses);
+        if (expEl) UI.countUp(expEl, s.expenses, 500, fmt);
     }
 
     renderHabitsCard() {
@@ -783,7 +838,7 @@ class App {
         const cal = document.getElementById('agenda-cal');
         if (!cal) return;
 
-        const daysWithEvents = Agenda.getDaysWithEvents(this._agendaYear, this._agendaMonth);
+        const dayEvents = Agenda.getEventsByDay(this._agendaYear, this._agendaMonth);
         const today = new Date().toISOString().slice(0, 10);
 
         const firstDay = new Date(this._agendaYear, this._agendaMonth - 1, 1).getDay();
@@ -803,10 +858,11 @@ class App {
             const ds = `${this._agendaYear}-${String(this._agendaMonth).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
             const isToday = ds === today;
             const isSelected = ds === this._agendaSelectedDay;
-            const hasDot = daysWithEvents.has(d);
+            const evts = dayEvents[d] || [];
+            const dots = evts.slice(0, 3).map(e => `<div class="cal-dot" style="background:${Agenda.catColor(e.cat)}"></div>`).join('');
             html += `<div class="cal-day${isToday ? ' today' : ''}${isSelected ? ' selected' : ''}" onclick="orbit.selectDay('${ds}')">
                 <span class="cal-day-num">${d}</span>
-                ${hasDot ? '<div class="cal-dot"></div>' : ''}
+                ${dots ? `<div class="cal-dots-row">${dots}</div>` : ''}
             </div>`;
         }
 
@@ -817,6 +873,21 @@ class App {
 
         html += '</div>';
         cal.innerHTML = html;
+        this._initCalSwipe();
+    }
+
+    _initCalSwipe() {
+        const calEl = document.getElementById('agenda-cal');
+        if (!calEl || calEl._swipeInit) return;
+        calEl._swipeInit = true;
+        let startX = 0;
+        calEl.addEventListener('touchstart', e => { startX = e.touches[0].clientX; }, { passive: true });
+        calEl.addEventListener('touchend', e => {
+            const dx = e.changedTouches[0].clientX - startX;
+            if (Math.abs(dx) > 50) {
+                dx < 0 ? this.agendaNextMonth() : this.agendaPrevMonth();
+            }
+        });
     }
 
     _renderDayEvents(dateStr) {
@@ -2104,6 +2175,7 @@ class App {
 
     renderHubHabitos() {
         this._renderMood();
+        this._renderHabitsHeatmap();
         const habits = Habits.getAll();
         const list = document.getElementById('hab-list');
         if (!list) return;
@@ -2140,6 +2212,43 @@ class App {
         if (ideasList && document.getElementById('hub-tools')?.style.display === '') {
             this._renderIdeasList();
         }
+    }
+
+    _renderHabitsHeatmap() {
+        const container = document.getElementById('habits-heatmap-container');
+        if (!container) return;
+        const habits = Habits.getAll();
+        if (!habits.length) { container.innerHTML = ''; return; }
+
+        const today = new Date();
+        const days = [];
+        for (let i = 364; i >= 0; i--) {
+            const d = new Date(today);
+            d.setDate(d.getDate() - i);
+            const ds = d.toISOString().slice(0, 10);
+            const done = habits.filter(h => Habits.getDoneForDate(h.id, ds)).length;
+            days.push({ ds, done, max: habits.length });
+        }
+
+        const COLS = Math.ceil(days.length / 7);
+        const cellSize = Math.max(Math.floor((container.offsetWidth - 16) / COLS), 4);
+
+        let html = `<div class="heatmap-grid" style="grid-template-columns:repeat(${COLS},${cellSize}px)">`;
+        days.forEach(d => {
+            const intensity = d.max ? Math.round((d.done / d.max) * 4) : 0;
+            html += `<div class="hm-cell hm-i${intensity}" title="${d.ds}: ${d.done}/${d.max} hábitos"></div>`;
+        });
+        html += '</div>';
+        html += `<div class="hm-legend">
+            <span style="font-size:10px;color:rgba(255,255,255,0.3)">Menos</span>
+            <div class="hm-cell hm-i0"></div>
+            <div class="hm-cell hm-i1"></div>
+            <div class="hm-cell hm-i2"></div>
+            <div class="hm-cell hm-i3"></div>
+            <div class="hm-cell hm-i4"></div>
+            <span style="font-size:10px;color:rgba(255,255,255,0.3)">Mais</span>
+        </div>`;
+        container.innerHTML = html;
     }
 
     addHabit() {
