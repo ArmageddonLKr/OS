@@ -164,6 +164,60 @@ export class Entertainment {
         } catch { return null; }
     }
 
+    /* ── ESPN: últimos resultados do time ───────────── */
+    static async getTeamLastResults(espnId, espnLeague, n = 5) {
+        if (!espnId || !espnLeague) return [];
+        const key = `ent_last_${espnId}`;
+        const hit = scGet(key);
+        if (hit) return hit;
+        try {
+            const d = await fetchJSON(`${ESPN_BASE}/${espnLeague}/teams/${espnId}/schedule`, 9000);
+            if (!d) return [];
+            const completed = (d.events || [])
+                .filter(e => e.competitions?.[0]?.status?.type?.completed)
+                .slice(-n)
+                .map(e => {
+                    const comp = e.competitions?.[0];
+                    const home = comp?.competitors?.find(c => c.homeAway === 'home');
+                    const away = comp?.competitors?.find(c => c.homeAway === 'away');
+                    const isHome = home?.team?.id === String(espnId);
+                    const myScore = parseInt((isHome ? home : away)?.score || 0);
+                    const oppScore = parseInt((isHome ? away : home)?.score || 0);
+                    const opp = (isHome ? away : home)?.team?.displayName || '?';
+                    const result = myScore > oppScore ? 'W' : myScore < oppScore ? 'L' : 'D';
+                    return { result, myScore, oppScore, opp: opp.slice(0, 14) };
+                })
+                .reverse();
+            scSet(key, completed);
+            return completed;
+        } catch { return []; }
+    }
+
+    /* ── ESPN: posição na tabela do time ────────────── */
+    static async getTeamStanding(espnId, espnLeague) {
+        if (!espnId || !espnLeague) return null;
+        const key = `ent_stand_${espnId}`;
+        const hit = scGet(key);
+        if (hit) return hit;
+        try {
+            const d = await fetchJSON(`${ESPN_BASE}/${espnLeague}/standings`, 9000);
+            const entries = d?.children?.[0]?.standings?.entries || d?.standings?.entries || [];
+            const entry = entries.find(e => e.team?.id === String(espnId));
+            if (!entry) return null;
+            const stats = {};
+            (entry.stats || []).forEach(s => { stats[s.name] = s.value; });
+            const result = {
+                pos: stats.rank ?? entries.indexOf(entry) + 1,
+                pts: stats.points ?? 0,
+                wins: stats.wins ?? 0,
+                losses: stats.losses ?? 0,
+                draws: stats.ties ?? 0
+            };
+            scSet(key, result);
+            return result;
+        } catch { return null; }
+    }
+
     /* ── Transfermarkt: busca time ──────────────────── */
     static async searchTMTeam(query) {
         const q = encodeURIComponent(query);

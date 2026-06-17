@@ -14,6 +14,7 @@ import { Finance, FIN_CATS } from './finance.js';
 import { Habits, Mood } from './habits.js';
 import { Vault } from './vault.js';
 import { Entertainment } from './entertainment.js';
+import { Loader } from './loader.js';
 
 const WEATHER_URL = 'https://api.open-meteo.com/v1/forecast?latitude=-5.0892&longitude=-42.8019&current=temperature_2m,weathercode,windspeed_10m,relativehumidity_2m&timezone=America/Fortaleza';
 const CAMBIO_URL  = 'https://economia.awesomeapi.com.br/json/last/USD-BRL,EUR-BRL';
@@ -243,6 +244,11 @@ class App {
     enterApp() {
         const pin = document.getElementById('pinscreen');
         if (!pin) return;
+        Loader.show('INICIALIZANDO OS', [
+            'Verificando identidade',
+            'Carregando dados',
+            'Preparando interface'
+        ], 320);
         pin.style.opacity = '0';
         pin.style.transition = 'opacity 0.35s';
         setTimeout(() => {
@@ -251,6 +257,7 @@ class App {
             document.getElementById('app').style.flexDirection = 'column';
             this.loadDashboard();
             this.loadChat();
+            Loader.hide(150);
             this.setupNetworkMonitor();
             this.setupConfirmDialog();
             if (this._pendingOpenChat) { this._pendingOpenChat = false; this.openChat(); }
@@ -2014,9 +2021,18 @@ class App {
     }
 
     async renderHubEsportes() {
+        Loader.show('CARREGANDO ESPORTES', [
+            'Buscando dados dos times',
+            'Carregando classificação',
+            'Buscando próximos jogos'
+        ], 450);
         // Times
         this._renderTeamsList();
-        Entertainment.getTeams().forEach(t => this._loadTeamGame(t));
+        Entertainment.getTeams().forEach(t => {
+            this._loadTeamGame(t);
+            this._loadTeamResults(t);
+            this._loadTeamStanding(t);
+        });
 
         // Alertas de transferência
         this._renderTransferWatches();
@@ -2068,6 +2084,7 @@ class App {
 
         this._renderFighters();
         this._renderPS5();
+        Loader.hide(150);
     }
 
     /* ── BOXE / MMA — LUTADORES ─────────────────────── */
@@ -2152,7 +2169,9 @@ class App {
                         <button class="stc-del" onclick="orbit.sportRemoveTeam('${t.id}')">×</button>
                     </div>
                 </div>
+                <div class="stc-results" id="stc-results-${t.id}"></div>
                 <div class="stcg" id="stcg-${t.id}"><span style="color:var(--fg-4);font-size:12px">Buscando...</span></div>
+                <div class="stc-standing" id="stc-stand-${t.id}"></div>
             </div>
         `).join('');
     }
@@ -2170,6 +2189,31 @@ class App {
         el.innerHTML = `
             <div class="stcg-teams">${game.home} <span class="stcg-score">${score}</span> ${game.away}</div>
             <div class="stcg-info">${game.live ? '🔴 AO VIVO' : `${fmtDate} · ${fmtTime}`}</div>
+        `;
+    }
+
+    async _loadTeamResults(team) {
+        const el = document.getElementById(`stc-results-${team.id}`);
+        if (!el) return;
+        const results = await Entertainment.getTeamLastResults(team.espnId, team.espnLeague);
+        if (!results.length) { el.innerHTML = ''; return; }
+        const cls = { W: 'chip-win', L: 'chip-loss', D: 'chip-draw' };
+        el.innerHTML = `<div class="stc-chips-row">${results.map(r =>
+            `<div class="stc-chip ${cls[r.result]}" title="${r.opp}: ${r.myScore}×${r.oppScore}">${r.result}</div>`
+        ).join('')}</div>`;
+    }
+
+    async _loadTeamStanding(team) {
+        const el = document.getElementById(`stc-stand-${team.id}`);
+        if (!el) return;
+        const s = await Entertainment.getTeamStanding(team.espnId, team.espnLeague);
+        if (!s) { el.innerHTML = ''; return; }
+        el.innerHTML = `
+            <div class="stc-standing-row">
+                <span class="stc-pos">${s.pos}º</span>
+                <span class="stc-pts">${s.pts} pts</span>
+                <span class="stc-wdl">${s.wins}V ${s.draws}E ${s.losses}D</span>
+            </div>
         `;
     }
 
@@ -2242,6 +2286,8 @@ class App {
         this.sportHideAddModal();
         this._renderTeamsList();
         this._loadTeamGame(team);
+        this._loadTeamResults(team);
+        this._loadTeamStanding(team);
         UI.toast(`${t.name} adicionado!`, 'ok');
     }
 
@@ -2796,10 +2842,11 @@ class App {
         UI.addMsg('sophy', q, false);
     }
 
-    async handleSend() {
+    async handleSend(overrideText, opts = {}) {
         if (this.busy) return;
         const inp = document.getElementById('msginput');
-        const text = inp.value.trim();
+        const isOverride = typeof overrideText === 'string';
+        const text = (isOverride ? overrideText : inp.value).trim();
         if (!text && !this.pendingImage) return;
 
         if (text === '/esquece') {
@@ -2814,6 +2861,14 @@ class App {
             IdeaVault.add(text.slice(7));
             UI.toast('Ideia salva! 💡', 'ok');
             inp.value = '';
+            return;
+        }
+
+        const diagTriggers = ['diagnóstico', 'diagnostico', '/diag', 'análise geral', 'analise geral', 'status geral', 'relatório geral', 'relatorio geral', 'resumo completo'];
+        if (!isOverride && diagTriggers.some(t => text.toLowerCase().includes(t))) {
+            inp.value = '';
+            inp.style.height = 'auto';
+            await this._runDiagnostic();
             return;
         }
 
@@ -2847,9 +2902,11 @@ class App {
         if (cancelBtn) cancelBtn.style.display = '';
         if (sendBtn) sendBtn.style.display = 'none';
 
-        UI.addMsg('user', text, false, this.pendingImage);
-        inp.value = '';
-        inp.style.height = 'auto';
+        if (!opts.silent) UI.addMsg('user', text, false, this.pendingImage);
+        if (!isOverride) {
+            inp.value = '';
+            inp.style.height = 'auto';
+        }
         // Mantém o teclado aberto após o envio (mobile)
         this._keepKeyboard = true;
         try { inp.focus({ preventScroll: true }); } catch (_) { inp.focus(); }
@@ -2907,7 +2964,13 @@ class App {
                 // Sem URL colada, mas a pergunta pede dado fresco → busca na web
                 try {
                     UI.setStatus('buscando na web...');
+                    Loader.show('BUSCANDO NA INTERNET', [
+                        'Consultando fontes',
+                        'Filtrando resultados',
+                        'Preparando resposta'
+                    ], 500);
                     const found = await AI.webSearch(text, ctrl.signal);
+                    Loader.hide(80);
                     if (found) {
                         aiMessages = [...aiMessages];
                         const last = aiMessages[aiMessages.length - 1];
@@ -2920,7 +2983,7 @@ class App {
                         }
                         UI.toast('Internet consultada 🌐', 'ok');
                     }
-                } catch (_) {}
+                } catch (_) { Loader.hide(0); }
                 UI.setStatus('respondendo...');
             }
 
@@ -3140,7 +3203,106 @@ class App {
             this.showPinned();
         } else if (cmd === 'exportar') {
             this.exportChat();
+        } else if (cmd === 'diag') {
+            this._runDiagnostic();
         }
+    }
+
+    /* ── RESUMO DO DIA / DIAGNÓSTICO ── */
+    async getDailyBrief() {
+        if (this.busy) return;
+        Loader.show('PREPARANDO BRIEFING', [
+            'Verificando agenda',
+            'Analisando hábitos',
+            'Consultando finanças',
+            'Sophy preparando resumo'
+        ], 500);
+
+        const agCtx = AI.agendaContext();
+        const s = Finance.getSummary(new Date().getFullYear(), new Date().getMonth() + 1);
+        const finCtx = `\nSaldo atual: ${Finance.fmt(s.balance)}${s.balance < 0 ? ' (negativo)' : ''}, ${s.txs.filter(t => t.type === 'expense').length} gastos no mês`;
+        const habits = Habits.getAll();
+        const today = Habits.today();
+        const done = habits.filter(h => (h.done || []).includes(today)).length;
+        const habCtx = `\nHábitos: ${done}/${habits.length} feitos hoje`;
+
+        const prompt = `O Pai acabou de abrir o app. Dê um briefing diário CURTO (máx 4 linhas) no teu estilo: o que tem na agenda hoje, como estão os hábitos, situação financeira resumida, e encerra com uma motivação rápida. Sem formatação, papo de WhatsApp mesmo.\n${agCtx}${finCtx}${habCtx}`;
+
+        this.openChat();
+        await new Promise(r => setTimeout(r, 300));
+        Loader.hide(100);
+        await this.handleSend(prompt, { silent: true });
+    }
+
+    async _runDiagnostic() {
+        if (this.busy) return;
+        Loader.show('RODANDO DIAGNÓSTICO', [
+            'Analisando finanças',
+            'Verificando hábitos',
+            'Consultando agenda',
+            'Sophy preparando relatório'
+        ], 500);
+
+        const now = new Date();
+        const y = now.getFullYear(), m = now.getMonth() + 1;
+
+        const finSummary = Finance.getSummary(y, m);
+        const byCat = Finance.byCategory((finSummary.txs || []).filter(t => t.type === 'expense'));
+        const topExpense = byCat[0];
+        const finHealth = finSummary.balance >= 0 ? 'positivo' : 'negativo';
+
+        const habits = Habits.getAll();
+        const today = Habits.today();
+        const habitsDoneToday = habits.filter(h => (h.done || []).includes(today)).length;
+        const habitsTotal = habits.length;
+        const habitRate = habitsTotal > 0 ? Math.round((habitsDoneToday / habitsTotal) * 100) : 0;
+        const streakMax = habits.length ? Math.max(...habits.map(h => Habits.getStreak(h))) : 0;
+
+        const moodData = Mood.last7();
+        const moodValues = moodData.filter(d => d.value);
+        const moodAvg = moodValues.length ? moodValues.reduce((a, b) => a + b.value, 0) / moodValues.length : 0;
+        const moodEmojis = ['', '😞', '😕', '😐', '🙂', '😄'];
+        const moodLabel = moodEmojis[Math.round(moodAvg)] || '😐';
+
+        const todayStr = AI.todayStr();
+        const agenda = Store.get(K.agenda, []);
+        const todayEvents = agenda.filter(e => e.date === todayStr);
+        const upcoming = agenda.filter(e => e.date > todayStr).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 3);
+
+        const streakData = Store.get('orbit_streak', { count: 0 });
+        const disciplines = Store.get(K.disc, []);
+
+        const diagPrompt = `DIAGNÓSTICO GERAL SOLICITADO — ${new Date().toLocaleString('pt-BR')}
+
+Gera um RELATÓRIO DIAGNÓSTICO COMPLETO no teu estilo (papo real, não formal), com estas seções:
+
+## 💰 FINANÇAS (${MONTHS_PT[m - 1]})
+- Saldo: ${Finance.fmt(finSummary.balance)} (${finHealth})
+- Entradas: ${Finance.fmt(finSummary.income)}
+- Saídas: ${Finance.fmt(finSummary.expenses)}
+- Maior gasto: ${topExpense ? `${topExpense.name} — ${Finance.fmt(topExpense.total)} (${Math.round((topExpense.total / (finSummary.expenses || 1)) * 100)}%)` : 'nenhum'}
+
+## ✅ HÁBITOS (hoje)
+- Concluídos: ${habitsDoneToday}/${habitsTotal} (${habitRate}%)
+- Maior streak ativo: ${streakMax} dias
+- Humor médio da semana: ${moodAvg.toFixed(1)}/5 ${moodLabel}
+
+## 📅 AGENDA
+- Hoje: ${todayEvents.length} evento(s)${todayEvents.length ? ': ' + todayEvents.map(e => e.title).join(', ') : ''}
+- Próximos: ${upcoming.length ? upcoming.map(e => `${e.date}: ${e.title}`).join(', ') : 'nenhum'}
+
+## 🎓 UFPI
+- Disciplinas: ${disciplines.length}
+
+## 📱 APP
+- Streak de uso: ${streakData.count} dias seguidos
+
+Com base nesses dados, dá um diagnóstico honesto: o que tá bem, o que precisa de atenção, e 2-3 ações concretas pra melhorar. Seja direta, sem enrolação.`;
+
+        this.openChat();
+        await new Promise(r => setTimeout(r, 300));
+        Loader.hide(100);
+        await this.handleSend(diagPrompt, { silent: true });
     }
 
     /* ── SEARCH ── */

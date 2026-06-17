@@ -608,6 +608,39 @@ body {
   transform: scale(0.98);
 }
 
+/* ── QUICK ACTIONS ── */
+.dash-quick-actions {
+  display: flex; gap: 8px; margin-bottom: 14px;
+  overflow-x: auto; scrollbar-width: none;
+}
+.dash-quick-actions::-webkit-scrollbar { display: none; }
+.dqa-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  background: var(--bg-2); border: 1px solid var(--line-1);
+  border-radius: var(--r-md); padding: 10px 14px; min-width: 56px;
+  cursor: pointer; transition: background 0.15s, transform 0.1s;
+  flex-shrink: 0; -webkit-tap-highlight-color: transparent;
+}
+.dqa-btn:active { transform: scale(0.94); background: var(--bg-3); }
+.dqa-icon { font-size: 18px; line-height: 1; }
+.dqa-label { font-size: 9px; font-weight: 600; letter-spacing: 0.05em; color: var(--fg-3); text-transform: uppercase; }
+
+/* ── BOTÃO RESUMO DO DIA ── */
+.dash-daily-brief {
+  width: 100%; display: flex; align-items: center; gap: 12px;
+  background: linear-gradient(135deg, rgba(212,175,55,0.08), var(--bg-2));
+  border: 1px solid rgba(212,175,55,0.18);
+  border-radius: var(--r-lg); padding: 12px 14px;
+  cursor: pointer; margin-bottom: 14px; color: var(--fg-1);
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--d-quick) var(--ease-out), background var(--d-base) var(--ease-out);
+  text-align: left; font-size: 18px;
+}
+.dash-daily-brief:active { transform: scale(0.98); }
+.ddb-text { flex: 1; min-width: 0; }
+.ddb-title { font-size: 13px; font-weight: 700; color: var(--fg-1); }
+.ddb-sub { font-size: 11px; color: var(--fg-4); margin-top: 1px; }
+
 .dcb-text { flex: 1; min-width: 0; }
 
 .dcb-name {
@@ -2342,4 +2375,72 @@ code.ic { font-family:var(--font-mono); font-size:12px; background:var(--bg-4); 
   -webkit-tap-highlight-color: transparent;
 }
 .transfer-watch-card .stc-del:active { color: var(--err); }
+
+/* ── OS LOADER ── */
+.os-loader {
+  position: fixed; inset: 0; z-index: 9999;
+  background: #000;
+  display: flex; align-items: center; justify-content: center;
+  animation: loaderFadeIn 0.2s ease;
+}
+@keyframes loaderFadeIn { from { opacity: 0 } to { opacity: 1 } }
+
+.osl-inner {
+  display: flex; flex-direction: column;
+  align-items: center; gap: 20px;
+  padding: 32px 24px; width: 100%; max-width: 340px;
+}
+
+.osl-icon svg { animation: osl-pulse 1.8s ease-in-out infinite; opacity: 0.9; }
+@keyframes osl-pulse {
+  0%,100% { opacity: 0.7; transform: scale(1); }
+  50%      { opacity: 1;   transform: scale(1.06); }
+}
+
+.osl-title {
+  font-size: 13px; font-weight: 700;
+  letter-spacing: 2px; text-transform: uppercase;
+  color: rgba(255,255,255,0.5);
+}
+
+.osl-steps { width: 100%; display: flex; flex-direction: column; gap: 10px; }
+
+.osl-step {
+  display: flex; align-items: center; gap: 12px;
+  font-size: 13px; color: rgba(255,255,255,0.35);
+  transition: color 0.3s ease;
+}
+.osl-step.active { color: rgba(255,255,255,0.85); }
+.osl-step.done   { color: rgba(255,255,255,0.45); }
+
+.osl-step-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  background: rgba(255,255,255,0.15);
+  transition: background 0.3s ease;
+}
+.osl-step.active .osl-step-dot {
+  background: var(--gold);
+  box-shadow: 0 0 8px var(--gold);
+  animation: osl-dot-pulse 1s ease-in-out infinite;
+}
+.osl-step.done .osl-step-dot { background: var(--ok); }
+@keyframes osl-dot-pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.4 } }
+
+.osl-step-check {
+  margin-left: auto; font-size: 12px; color: var(--ok);
+  opacity: 0; transition: opacity 0.3s;
+}
+.osl-step.done .osl-step-check { opacity: 1; }
+
+.osl-bar-wrap {
+  width: 100%; height: 2px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 2px; overflow: hidden;
+}
+.osl-bar {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, var(--gold), var(--gold-hi));
+  border-radius: 2px;
+  transition: width 0.4s ease;
+}
 

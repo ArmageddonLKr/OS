@@ -27,6 +27,26 @@
 
 <div id="aurora-bg"><div class="aurora-orb a1"></div><div class="aurora-orb a2"></div><div class="aurora-orb a3"></div></div>
 
+<!-- ── LOADER GLOBAL ───────────────────────────────────────────── -->
+<div id="os-loader" class="os-loader" style="display:none">
+    <div class="osl-inner">
+        <div class="osl-icon">
+            <svg viewBox="0 0 512 512" width="56" height="56" aria-hidden="true">
+                <g fill="#fff" stroke="#fff" stroke-width="2" stroke-linejoin="round">
+                    <circle cx="256" cy="92" r="33" fill="none" stroke-width="22"/>
+                    <path d="M242 122 L270 122 L266 392 L246 392 Z"/>
+                    <path d="M120 196 L168 176 Q256 152 344 176 L392 196 L344 206 Q256 184 168 206 Z"/>
+                    <path d="M92 246 C 96 358 168 452 256 452 C 344 452 416 358 420 246 C 404 316 366 350 324 364 C 302 372 280 376 256 376 C 232 376 210 372 188 364 C 146 350 108 316 92 246 Z"/>
+                    <path d="M236 440 L256 488 L276 440 Z"/>
+                </g>
+            </svg>
+        </div>
+        <div class="osl-title" id="osl-title">Carregando...</div>
+        <div class="osl-steps" id="osl-steps"></div>
+        <div class="osl-bar-wrap"><div class="osl-bar" id="osl-bar"></div></div>
+    </div>
+</div>
+
 <!-- ── PIN SCREEN ──────────────────────────────────────────────── -->
 <section id="pinscreen" class="screen">
     <div class="pin-hero">
@@ -87,6 +107,38 @@
                         <div class="dcb-hint" id="dcb-hint">Falar com a Orbit...</div>
                     </div>
                     <svg class="dcb-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+                </button>
+
+                <div class="dash-quick-actions">
+                    <button class="dqa-btn" onclick="orbit.openEvtModal()">
+                        <span class="dqa-icon">📅</span>
+                        <span class="dqa-label">Evento</span>
+                    </button>
+                    <button class="dqa-btn" onclick="orbit.openTxModal()">
+                        <span class="dqa-icon">💰</span>
+                        <span class="dqa-label">Gasto</span>
+                    </button>
+                    <button class="dqa-btn" onclick="orbit.switchTab('hub');setTimeout(()=>orbit.switchHub('habitos'),200)">
+                        <span class="dqa-icon">✅</span>
+                        <span class="dqa-label">Hábito</span>
+                    </button>
+                    <button class="dqa-btn" onclick="orbit.switchTab('academia');setTimeout(()=>orbit.switchAcad('pomo'),200)">
+                        <span class="dqa-icon">⏱️</span>
+                        <span class="dqa-label">Pomo</span>
+                    </button>
+                    <button class="dqa-btn" onclick="orbit.openChat()">
+                        <span class="dqa-icon">💬</span>
+                        <span class="dqa-label">Chat</span>
+                    </button>
+                </div>
+
+                <button class="dash-daily-brief" onclick="orbit.getDailyBrief()">
+                    <span>📋</span>
+                    <div class="ddb-text">
+                        <div class="ddb-title">Resumo do dia</div>
+                        <div class="ddb-sub">A Sophy prepara um briefing pra você</div>
+                    </div>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
                 </button>
 
                 <div class="dash-card">
@@ -185,6 +237,7 @@
                 <button class="cmd-item" onclick="orbit.runCmd('esquece')"><span class="cmd-icon">🗑️</span><div class="cmd-info"><div class="cmd-name">/esquece</div><div class="cmd-desc">Limpar histórico da sessão</div></div></button>
                 <button class="cmd-item" onclick="orbit.runCmd('pinned')"><span class="cmd-icon">📌</span><div class="cmd-info"><div class="cmd-name">/fixados</div><div class="cmd-desc">Ver mensagens fixadas</div></div></button>
                 <button class="cmd-item" onclick="orbit.runCmd('exportar')"><span class="cmd-icon">💾</span><div class="cmd-info"><div class="cmd-name">/exportar</div><div class="cmd-desc">Exportar conversa</div></div></button>
+                <button class="cmd-item" onclick="orbit.runCmd('diag')"><span class="cmd-icon">🔍</span><div class="cmd-info"><div class="cmd-name">/diagnóstico</div><div class="cmd-desc">Relatório completo de saúde do app</div></div></button>
             </div>
             <div id="attach-bar" class="attach-bar" style="display:none"></div>
             <div class="inp-area">
