@@ -246,6 +246,18 @@
                     <div class="fin-bal-val" id="fin-expenses">R$ 0,00</div>
                 </div>
             </div>
+            <div class="fin-budgets-wrap">
+                <div class="fin-budgets-hdr">
+                    <span>Metas do mês</span>
+                    <button class="fin-budget-add-btn" onclick="orbit.toggleBudgetForm()">+</button>
+                </div>
+                <div id="fin-budget-form" class="fin-budget-form" style="display:none">
+                    <select id="budget-cat-sel"></select>
+                    <input type="number" id="budget-amount-inp" placeholder="Limite R$" min="0" step="10">
+                    <button class="btn btn-primary" onclick="orbit.saveBudget()">Salvar</button>
+                </div>
+                <div id="fin-budgets-list" class="fin-budgets-list"></div>
+            </div>
             <div class="fin-filter-row">
                 <button class="fin-filter active" id="ff-all" onclick="orbit.filterTx('all')">Todos</button>
                 <button class="fin-filter" id="ff-in" onclick="orbit.filterTx('income')">Entradas</button>
@@ -352,6 +364,17 @@
 
         <!-- Hábitos -->
         <div id="hub-habitos" class="mod-section" style="display:none">
+            <div class="mood-card">
+                <div class="plabel">Como você tá hoje?</div>
+                <div class="mood-picker" id="mood-picker">
+                    <button class="mood-emoji" data-v="1" onclick="orbit.setMood(1)">😞</button>
+                    <button class="mood-emoji" data-v="2" onclick="orbit.setMood(2)">😕</button>
+                    <button class="mood-emoji" data-v="3" onclick="orbit.setMood(3)">😐</button>
+                    <button class="mood-emoji" data-v="4" onclick="orbit.setMood(4)">🙂</button>
+                    <button class="mood-emoji" data-v="5" onclick="orbit.setMood(5)">😄</button>
+                </div>
+                <div class="mood-week" id="mood-week"></div>
+            </div>
             <div id="hab-list" class="hab-list"></div>
             <div class="hab-add-form">
                 <div class="plabel">Novo Hábito</div>

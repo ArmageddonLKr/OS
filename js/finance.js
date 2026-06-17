@@ -4,6 +4,7 @@
 import { Store } from './store.js';
 
 const K_TX = 'orbit_finance_tx';
+const K_BUDGETS = 'orbit_finance_budgets';
 
 export const FIN_CATS = [
     { id: 'salary',     name: 'Salário',     icon: '💼', type: 'income'  },
@@ -79,5 +80,31 @@ export class Finance {
             .sort((a, b) => b[1] - a[1])
             .slice(0, 6)
             .map(([id, total]) => ({ id, name: this.catInfo(id).name, total }));
+    }
+
+    /* ── Metas mensais por categoria ── */
+    static getBudgets() { return Store.get(K_BUDGETS, {}); }
+    static saveBudgets(o) { Store.set(K_BUDGETS, o); }
+
+    static setBudget(catId, limit) {
+        const b = this.getBudgets();
+        b[catId] = limit;
+        this.saveBudgets(b);
+    }
+
+    static removeBudget(catId) {
+        const b = this.getBudgets();
+        delete b[catId];
+        this.saveBudgets(b);
+    }
+
+    static getBudgetProgress(year, month) {
+        const budgets = this.getBudgets();
+        const txs = this.getMonth(year, month).filter(t => t.type === 'expense');
+        return Object.entries(budgets).map(([catId, limit]) => {
+            const spent = txs.filter(t => t.cat === catId).reduce((s, t) => s + (t.amount || 0), 0);
+            const info = this.catInfo(catId);
+            return { id: catId, name: info.name, icon: info.icon, limit, spent, pct: limit > 0 ? Math.min(100, Math.round((spent / limit) * 100)) : 0 };
+        }).sort((a, b) => b.pct - a.pct);
     }
 }

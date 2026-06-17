@@ -132,6 +132,15 @@ export class Grades {
         const total = valid.reduce((s, g) => s + this.calcMedia(g.notas), 0);
         return (total / valid.length).toFixed(2);
     }
+
+    /* Quanto precisa tirar nas notas restantes pra fechar a média alvo (padrão: aprovação direta) */
+    static neededGrade(notas, target = 7) {
+        const known = notas.filter(n => n !== null && n !== '');
+        const missing = notas.length - known.length;
+        if (missing <= 0) return null;
+        const sum = known.reduce((s, n) => s + parseFloat(n), 0);
+        return Math.round(((target * notas.length - sum) / missing) * 100) / 100;
+    }
 }
 
 /* [#119] Idea Vault Engine */

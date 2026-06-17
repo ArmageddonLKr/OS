@@ -93,3 +93,35 @@ export class Habits {
         return { done, total: all.length };
     }
 }
+
+const K_MOOD = 'orbit_mood';
+const MOOD_LABELS = { 1: 'pesado', 2: 'baixo', 3: 'neutro', 4: 'bem', 5: 'animado' };
+
+export class Mood {
+    static getAll() { return Store.get(K_MOOD, {}); }
+    static save(o) { Store.set(K_MOOD, o); }
+
+    static setToday(value) {
+        const all = this.getAll();
+        all[brStr()] = value;
+        this.save(all);
+    }
+
+    static today() {
+        return this.getAll()[brStr()] ?? null;
+    }
+
+    static labelFor(value) { return MOOD_LABELS[value] || ''; }
+
+    static last7() {
+        const all = this.getAll();
+        const days = [];
+        for (let i = 6; i >= 0; i--) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            const ds = brStr(d);
+            days.push({ date: ds, value: all[ds] ?? null, day: parseInt(ds.slice(8, 10), 10) });
+        }
+        return days;
+    }
+}
