@@ -48,11 +48,13 @@ export class UI {
             ? `<img src="data:${image.type};base64,${image.data}" class="msg-img">`
             : '';
 
+        const time = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
         row.innerHTML = `
             <div class="msg-av">${role === 'user' ? Icons.user : Icons.orb}</div>
             <div class="mbubble">
                 ${imgHtml}
                 <div class="m-content">${isStatic ? '' : this.renderMd(text)}</div>
+                <span class="msg-time">${time}</span>
             </div>
         `;
 

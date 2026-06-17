@@ -102,6 +102,23 @@ class App {
         }
     }
 
+    _applyDynamicTheme() {
+        const h = AI.nowBR().getHours();
+        const a1 = document.querySelector('.aurora-orb.a1');
+        const a2 = document.querySelector('.aurora-orb.a2');
+        if (!a1 || !a2) return;
+        if (h >= 0 && h < 5) {
+            a1.style.background = 'radial-gradient(circle, rgba(120,70,180,0.12) 0%, transparent 65%)';
+            a2.style.background = 'radial-gradient(circle, rgba(60,60,120,0.08) 0%, transparent 65%)';
+        } else if (h >= 5 && h < 12) {
+            a1.style.background = 'radial-gradient(circle, rgba(60,110,200,0.15) 0%, transparent 65%)';
+            a2.style.background = 'radial-gradient(circle, rgba(80,150,210,0.08) 0%, transparent 65%)';
+        } else if (h >= 18 && h < 23) {
+            a1.style.background = 'radial-gradient(circle, rgba(200,110,50,0.12) 0%, transparent 65%)';
+            a2.style.background = 'radial-gradient(circle, rgba(210,150,30,0.08) 0%, transparent 65%)';
+        }
+    }
+
     setAccent(color) {
         const cfg = Store.getCfg();
         cfg.accent = color;
@@ -128,6 +145,7 @@ class App {
     boot() {
         this._migrateConfig();
         this.applyAccent();
+        this._applyDynamicTheme();
         this.initOrb();
         this.setupListeners();
         this.setupVoice();
@@ -268,6 +286,17 @@ class App {
                 const cfg = Store.getCfg();
                 if (!cfg.groqKey && !cfg.apiKey) {
                     setTimeout(() => { this.activeTab = 'ai'; this.openPanel(); }, 800);
+                } else {
+                    Loader.show('BEM-VINDO À OS', [
+                        'Orbit Sophy inicializada',
+                        'Sistema de identidade ativo',
+                        'Memória episódica preparada',
+                        'Prontos para começar'
+                    ], 800);
+                    setTimeout(() => {
+                        Loader.hide();
+                        setTimeout(() => this.openChat(), 500);
+                    }, 3500);
                 }
             }
             // Pede permissão de notificação de forma não intrusiva (5s após entrar)
@@ -414,6 +443,23 @@ class App {
         dash.style.display = 'none';
         this.chatOpen = true;
         history.pushState({ chat: true }, '');
+
+        const moodVal = Mood.today();
+        const moodBadge = document.getElementById('hdr-mood-badge');
+        if (moodBadge) {
+            const emojis = ['', '😞', '😕', '😐', '🙂', '😄'];
+            moodBadge.classList.remove('pulse');
+            if (moodVal) {
+                moodBadge.textContent = emojis[moodVal];
+                moodBadge.style.display = 'inline';
+                moodBadge.title = 'Humor registrado hoje';
+            } else {
+                moodBadge.textContent = '❓';
+                moodBadge.style.display = 'inline';
+                moodBadge.title = 'Humor não registrado hoje';
+                moodBadge.classList.add('pulse');
+            }
+        }
         setTimeout(() => {
             const inp = document.getElementById('msginput');
             if (inp) {
@@ -490,6 +536,28 @@ class App {
                 hint.style.color = '';
             }
         }
+
+        const streak = this._updateStreak();
+        const streakEl = document.getElementById('dash-streak');
+        const streakCount = document.getElementById('streak-count');
+        if (streakEl && streakCount && streak >= 2) {
+            streakEl.style.display = 'flex';
+            streakCount.textContent = streak;
+        }
+    }
+
+    _updateStreak() {
+        const today = AI.todayStr();
+        const data = Store.get(K.streak, { lastOpen: '', count: 0 });
+        const d = new Date();
+        d.setDate(d.getDate() - 1);
+        const yesterday = AI.todayStr(d);
+        if (data.lastOpen === today) return data.count;
+        if (data.lastOpen === yesterday) data.count++;
+        else data.count = 1;
+        data.lastOpen = today;
+        Store.set(K.streak, data);
+        return data.count;
     }
 
     renderMonthLabel() {
@@ -3631,11 +3699,47 @@ class App {
     handleInput() {
         const inp = document.getElementById('msginput');
         if (!inp) return;
-        const val = inp.value;
+        let val = inp.value;
+        const MAX_CHARS = 4000;
+        if (val.length > MAX_CHARS) {
+            val = val.slice(0, MAX_CHARS);
+            inp.value = val;
+        }
         if (val === '/') this.showCmdPalette();
         else this.hideCmdPalette();
         inp.style.height = 'auto';
         inp.style.height = Math.min(inp.scrollHeight, 120) + 'px';
+        this._updateCharIndicator(val, MAX_CHARS);
+        this._updateInputModeTag(val);
+    }
+
+    _updateCharIndicator(val, max) {
+        const ind = document.getElementById('char-indicator');
+        const count = document.getElementById('char-count');
+        const bar = document.getElementById('char-bar');
+        if (!ind || !count || !bar) return;
+        const len = val.length;
+        if (len <= 100) { ind.style.display = 'none'; return; }
+        ind.style.display = 'flex';
+        count.textContent = len > 1000 ? (len / 1000).toFixed(1) + 'k' : String(len);
+        const pct = Math.min(len / max, 1) * 100;
+        bar.style.width = pct + '%';
+        let color = 'var(--fg-3)';
+        if (pct >= 90) color = '#e5484d';
+        else if (pct >= 70) color = 'var(--gold)';
+        bar.style.background = color;
+        count.style.color = pct >= 90 ? '#e5484d' : (pct >= 70 ? 'var(--gold)' : 'var(--fg-4)');
+    }
+
+    _updateInputModeTag(val) {
+        const tag = document.getElementById('inp-mode-tag');
+        if (!tag) return;
+        if (val.length > 15 && AI.needsWeb(val)) {
+            tag.textContent = '🌐 Vai pesquisar na internet';
+            tag.style.display = 'block';
+        } else {
+            tag.style.display = 'none';
+        }
     }
 
     showCmdPalette() { const pal = document.getElementById('cmd-palette'); if (pal) pal.style.display = 'flex'; }
@@ -3779,6 +3883,76 @@ Com base nesses dados, dá um diagnóstico honesto: o que tá bem, o que precisa
             else { row.classList.add('search-hidden'); row.classList.remove('search-match'); }
         });
         document.querySelector('.msg-row.search-match')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    /* ── BUSCA GLOBAL NO APP ── */
+    openAppSearch() {
+        const bs = document.createElement('div');
+        bs.className = 'bottom-sheet';
+        bs.style.display = 'flex';
+        bs.innerHTML = `
+            <div class="bs-backdrop" onclick="this.closest('.bottom-sheet').remove()"></div>
+            <div class="bs-content">
+                <div class="bs-hdr">
+                    <div class="bs-title">BUSCAR NO APP</div>
+                    <button class="bs-close" onclick="this.closest('.bottom-sheet').remove()">×</button>
+                </div>
+                <input type="search" id="app-search-inp" placeholder="Eventos, hábitos, transações..."
+                    oninput="orbit._runAppSearch(this.value)" autocomplete="off"
+                    style="margin-bottom:12px" autofocus>
+                <div id="app-search-results"></div>
+            </div>
+        `;
+        document.body.appendChild(bs);
+        setTimeout(() => document.getElementById('app-search-inp')?.focus(), 100);
+    }
+
+    _runAppSearch(q) {
+        const el = document.getElementById('app-search-results');
+        if (!el || !q || q.length < 2) { if (el) el.innerHTML = ''; return; }
+        const results = [];
+        const ql = q.toLowerCase();
+
+        (Store.get(K.agenda, [])).forEach(e => {
+            if (e.title?.toLowerCase().includes(ql))
+                results.push({ icon: '📅', label: e.title, sub: e.date, action: `orbit.switchTab('agenda')` });
+        });
+
+        (Store.get(K.fin_tx, [])).forEach(t => {
+            if (t.desc?.toLowerCase().includes(ql))
+                results.push({ icon: t.type === 'income' ? '💚' : '🔴', label: t.desc, sub: `R$ ${t.amount}`, action: `orbit.switchTab('cofre')` });
+        });
+
+        (Habits.getAll()).forEach(h => {
+            if (h.name?.toLowerCase().includes(ql))
+                results.push({ icon: h.icon || '✅', label: h.name, sub: 'Hábito', action: `orbit.switchTab('hub');setTimeout(()=>orbit.switchHub('habitos'),200)` });
+        });
+
+        (Store.get(K.flash, [])).forEach(f => {
+            if (f.front?.toLowerCase().includes(ql) || f.back?.toLowerCase().includes(ql))
+                results.push({ icon: '🃏', label: f.front, sub: f.back?.slice(0, 40), action: `orbit.switchTab('academia')` });
+        });
+
+        if (!results.length) {
+            el.innerHTML = `<div style="color:var(--fg-4);font-size:13px;padding:8px 0">Nenhum resultado para "${q}"</div>`;
+            return;
+        }
+
+        el.innerHTML = results.slice(0, 10).map(r => `
+            <div class="search-result-item" onclick="${r.action};this.closest('.bottom-sheet').remove()">
+                <span class="sri-icon">${r.icon}</span>
+                <div class="sri-info">
+                    <div class="sri-label">${r.label}</div>
+                    ${r.sub ? `<div class="sri-sub">${r.sub}</div>` : ''}
+                </div>
+            </div>
+        `).join('');
+    }
+
+    /* ── MODO FOCO ── */
+    toggleFocusMode() {
+        const isFocus = document.body.classList.toggle('focus-mode');
+        UI.toast(isFocus ? '🎯 Modo foco ativado' : '📱 Modo normal', 'info', 1500);
     }
 
     scrollBottom() { const msgs = document.getElementById('msgs'); if (msgs) msgs.scrollTop = msgs.scrollHeight; }
@@ -3963,6 +4137,10 @@ Com base nesses dados, dá um diagnóstico honesto: o que tá bem, o que precisa
                 <div class="psec"><label class="plabel">Modelo Groq</label><select id="s-groq-model">
                     <option value="llama-3.3-70b-versatile" ${cfg.groqModel==='llama-3.3-70b-versatile'?'selected':''}>LLaMA 3.3 70B Versatile (recomendado)</option>
                     <option value="llama-3.1-8b-instant" ${cfg.groqModel==='llama-3.1-8b-instant'?'selected':''}>LLaMA 3.1 8B Instant (mais rápido)</option>
+                    <option value="compound-beta" ${cfg.groqModel==='compound-beta'?'selected':''}>⚡ Compound Beta (web search nativa — experimental)</option>
+                    <option value="llama-3.3-70b-specdec" ${cfg.groqModel==='llama-3.3-70b-specdec'?'selected':''}>🚀 LLaMA 3.3 70B SpecDec (mais rápido)</option>
+                    <option value="deepseek-r1-distill-llama-70b" ${cfg.groqModel==='deepseek-r1-distill-llama-70b'?'selected':''}>🧠 DeepSeek R1 Distill 70B (raciocínio)</option>
+                    <option value="gemma2-9b-it" ${cfg.groqModel==='gemma2-9b-it'?'selected':''}>🪶 Gemma 2 9B (ultra leve)</option>
                     <option value="mixtral-8x7b-32768" ${cfg.groqModel==='mixtral-8x7b-32768'?'selected':''}>Mixtral 8x7B</option>
                 </select></div>
                 <div style="height:1px;background:var(--border);margin:16px 0"></div>
@@ -4274,7 +4452,15 @@ Com base nesses dados, dá um diagnóstico honesto: o que tá bem, o que precisa
                     // Recoloca o foco no próximo tick (alguns Androids tiram durante o handler)
                     setTimeout(() => inp.focus(), 0);
                 }
-                if (e.key === 'Escape') this.hideCmdPalette();
+                if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+                    e.preventDefault();
+                    this.showCmdPalette();
+                }
+                if (e.key === 'Escape') {
+                    const pal = document.getElementById('cmd-palette');
+                    if (pal && pal.style.display !== 'none') this.hideCmdPalette();
+                    else if (this.abortCtrl) this.cancelStream();
+                }
             });
             inp.addEventListener('input', () => this.handleInput());
             // Se o textarea perder foco logo após enviar (Android), retoma

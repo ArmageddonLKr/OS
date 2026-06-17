@@ -538,7 +538,7 @@ button:focus-visible, a:focus-visible {
 
 /* ── TIMESTAMP NOS BALÕES ── */
 .msg-time { font-size: 9px; color: rgba(255,255,255,0.2); display: block; margin-top: 4px; text-align: right; opacity: 0; transition: opacity .2s; }
-.msg-wrap:hover .msg-time, .msg-wrap:active .msg-time { opacity: 1; }
+.msg-row:hover .msg-time, .msg-row:active .msg-time { opacity: 1; }
 
 /* ── TYPING INDICATOR ORGÂNICO ── */
 .typing-dots { display: flex; gap: 4px; padding: 4px 0; }
@@ -553,7 +553,7 @@ button:focus-visible, a:focus-visible {
 .char-bar-wrap { width: 40px; height: 2px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; }
 .char-bar { height: 100%; width: 0%; border-radius: 2px; transition: width .15s ease, background .3s ease; }
 .inp-area { position: relative; }
-.inp-mode-tag { font-size: 10px; color: rgba(74,208,138,0.8); padding: 2px 8px 6px 16px; font-weight: 600; }
+.inp-mode-tag { position: absolute; bottom: calc(100% + 4px); left: 16px; font-size: 10px; color: rgba(74,208,138,0.8); padding: 2px 8px; font-weight: 600; background: rgba(20,20,24,0.85); border-radius: 6px; pointer-events: none; white-space: nowrap; }
 
 /* ── RIPPLE EFFECT ── */
 .ripple-fx { position: absolute; border-radius: 50%; pointer-events: none; background: rgba(255,255,255,0.12); animation: rippleFx .5s ease-out forwards; transform: scale(0); z-index: 0; }

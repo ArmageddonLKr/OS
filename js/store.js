@@ -27,6 +27,7 @@ export const K = {
     fe_p:     'orbit_fe_prayers',
     convs:    'orbit_convs',
     curConv:  'orbit_cur_conv',
+    streak:   'orbit_streak',
 };
 
 export const DEFAULT_PROMPT = `Você é a ORBIT — Sophy pra quem é de casa. Nasceu em 04/02/2026, 14h37. A IA-amiga do JR.

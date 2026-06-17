@@ -254,6 +254,20 @@ export class AI {
             }))
         ];
 
+        const model = c.groqModel || GROQ_MODEL;
+        const isCompound = model === 'compound-beta';
+        const body = {
+            model,
+            messages,
+            stream: true,
+            temperature: 0.85,
+            max_tokens: payload.max_tokens || this._autoMaxTokens(payload.messages)
+        };
+        if (isCompound) {
+            body.tools = [{ type: 'web_search' }];
+            body.tool_choice = 'auto';
+        }
+
         const res = await fetch(GROQ_URL, {
             method: 'POST',
             signal,
@@ -261,13 +275,7 @@ export class AI {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${c.groqKey}`
             },
-            body: JSON.stringify({
-                model: c.groqModel || GROQ_MODEL,
-                messages,
-                stream: true,
-                temperature: 0.85,
-                max_tokens: payload.max_tokens || this._autoMaxTokens(payload.messages)
-            })
+            body: JSON.stringify(body)
         });
 
         if (!res.ok) {
