@@ -4496,7 +4496,7 @@ Com base nesses dados, dá um diagnóstico honesto: o que tá bem, o que precisa
 
     delIdea(id) { IdeaVault.remove(id); this.renderPanelTab('extras'); }
 
-    exportBkp() {
+    async exportBkp() {
         const data = {
             config: { ...Store.getCfg(), apiKey: '', groqKey: '' },
             ep: Store.getEp(), nuc: Store.getNuc(),
@@ -4519,10 +4519,20 @@ Com base nesses dados, dá um diagnóstico honesto: o que tá bem, o que precisa
             streak: Store.get(K.streak, { lastOpen: '', count: 0 }),
             convs: Store.get(K.convs, []),
         };
+        const filename = `orbit-backup-${new Date().toISOString().slice(0, 10)}.json`;
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const file = new File([blob], filename, { type: 'application/json' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            try {
+                await navigator.share({ files: [file], title: 'Backup Orbit' });
+                return UI.toast('Backup completo exportado!', 'ok');
+            } catch (e) {
+                if (e.name === 'AbortError') return;
+            }
+        }
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `orbit-backup-${new Date().toISOString().slice(0, 10)}.json`;
+        a.download = filename;
         a.click();
         URL.revokeObjectURL(a.href);
         UI.toast('Backup completo exportado!', 'ok');
