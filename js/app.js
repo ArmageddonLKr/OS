@@ -2271,19 +2271,94 @@ class App {
 
     _renderMood() {
         const picker = document.getElementById('mood-picker');
-        const week = document.getElementById('mood-week');
-        if (!picker || !week) return;
+        const canvas = document.getElementById('mood-chart');
+        if (!picker || !canvas) return;
         const today = Mood.today();
         picker.querySelectorAll('.mood-emoji').forEach(btn => {
             btn.classList.toggle('active', parseInt(btn.dataset.v, 10) === today);
         });
-        week.innerHTML = Mood.last7().map(d => {
-            const h = d.value ? `${d.value * 20}%` : '4px';
-            return `<div class="mood-bar-col" title="${d.date}">
-                <div class="mood-bar ${d.value ? 'mood-v' + d.value : ''}" style="height:${h}"></div>
-                <span class="mood-bar-day">${d.day}</span>
-            </div>`;
-        }).join('');
+        this._renderMoodChart(canvas);
+    }
+
+    _renderMoodChart(canvas) {
+        const days = Mood.last7();
+        const dpr = window.devicePixelRatio || 1;
+        const W = canvas.offsetWidth || 320;
+        const H = 120;
+        canvas.width = W * dpr;
+        canvas.height = H * dpr;
+        canvas.style.height = H + 'px';
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        ctx.clearRect(0, 0, W, H);
+
+        const VCOLORS = { 1: '#ff5a5a', 2: '#d9a23a', 3: '#888888', 4: '#4a9eff', 5: '#4ad08a' };
+        const pad = { l: 18, r: 14, t: 14, b: 18 };
+        const chartW = W - pad.l - pad.r;
+        const chartH = H - pad.t - pad.b;
+        const yFor = v => pad.t + chartH - ((v - 1) / 4) * chartH;
+        const xStep = chartW / (days.length - 1);
+
+        // Linhas-guia dos 5 níveis de humor
+        ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+        ctx.lineWidth = 1;
+        for (let v = 1; v <= 5; v++) {
+            const y = yFor(v);
+            ctx.beginPath();
+            ctx.moveTo(pad.l, y);
+            ctx.lineTo(pad.l + chartW, y);
+            ctx.stroke();
+        }
+
+        const pts = days.map((d, i) => ({
+            x: pad.l + i * xStep,
+            y: d.value ? yFor(d.value) : null,
+            v: d.value,
+            date: d.date
+        }));
+        const known = pts.filter(p => p.y !== null);
+
+        // Curva suave conectando os dias com humor registrado
+        if (known.length >= 2) {
+            ctx.beginPath();
+            ctx.moveTo(known[0].x, known[0].y);
+            for (let i = 1; i < known.length; i++) {
+                const prev = known[i - 1], cur = known[i];
+                const mx = (prev.x + cur.x) / 2;
+                ctx.quadraticCurveTo(prev.x, prev.y, mx, (prev.y + cur.y) / 2);
+                ctx.quadraticCurveTo(mx, (prev.y + cur.y) / 2, cur.x, cur.y);
+            }
+            ctx.strokeStyle = 'rgba(212,175,55,0.65)';
+            ctx.lineWidth = 2;
+            ctx.lineJoin = 'round';
+            ctx.stroke();
+        }
+
+        // Pontos coloridos por valor de humor + label do dia da semana
+        ctx.textAlign = 'center';
+        pts.forEach(p => {
+            const dow = new Date(p.date + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '');
+            ctx.fillStyle = 'rgba(255,255,255,0.35)';
+            ctx.font = '8px Arial, sans-serif';
+            ctx.fillText(dow, p.x, H - 4);
+
+            if (p.y === null) {
+                ctx.beginPath();
+                ctx.arc(p.x, pad.t + chartH, 2.5, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255,255,255,0.15)';
+                ctx.fill();
+                return;
+            }
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 4.5, 0, Math.PI * 2);
+            ctx.fillStyle = VCOLORS[p.v];
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 4.5, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        });
     }
 
     setMood(value) {
@@ -4335,7 +4410,7 @@ Com base nesses dados, dá um diagnóstico honesto: o que tá bem, o que precisa
                 </div></div>
                 <div style="height:1px;background:var(--border);margin:16px 0"></div>
                 <div class="psec"><label class="plabel">Backup de Dados</label>
-                <p style="font-size:11px;color:var(--text-muted);margin-bottom:10px">Exporta tudo: finanças, agenda, hábitos, cards, fé, PS5, kanban.</p>
+                <p style="font-size:11px;color:var(--text-muted);margin-bottom:10px">Exporta tudo: finanças, agenda, hábitos, cards, fé, PS5, kanban, times, conversas. Chaves de API não são incluídas.</p>
                 <div style="display:flex;gap:8px">
                 <button class="btn btn-ghost" style="margin:0;flex:1" onclick="orbit.exportBkp()">EXPORTAR</button>
                 <button class="btn btn-ghost" style="margin:0;flex:1" onclick="orbit.importBkp()">IMPORTAR</button>
@@ -4440,6 +4515,9 @@ Com base nesses dados, dá um diagnóstico honesto: o que tá bem, o que precisa
             fe_prayers: Store.get('orbit_fe_prayers', []),
             vault_enc: localStorage.getItem('orbit_vault_data'),
             vault_chk: localStorage.getItem('orbit_vault_check'),
+            teams: Store.get('orbit_teams', []),
+            streak: Store.get(K.streak, { lastOpen: '', count: 0 }),
+            convs: Store.get(K.convs, []),
         };
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const a = document.createElement('a');
@@ -4482,6 +4560,9 @@ Com base nesses dados, dá um diagnóstico honesto: o que tá bem, o que precisa
                 if (d.fe_prayers) Store.set('orbit_fe_prayers', d.fe_prayers);
                 if (d.vault_enc) localStorage.setItem('orbit_vault_data', d.vault_enc);
                 if (d.vault_chk) localStorage.setItem('orbit_vault_check', d.vault_chk);
+                if (d.teams) Store.set('orbit_teams', d.teams);
+                if (d.streak) Store.set(K.streak, d.streak);
+                if (d.convs) Store.set(K.convs, d.convs);
                 UI.toast('Backup importado! Recarregando...', 'ok');
                 setTimeout(() => location.reload(), 1200);
             } catch { UI.toast('Arquivo inválido ou corrompido.', 'err'); }
