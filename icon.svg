@@ -1,21 +1,78 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <rect width="512" height="512" fill="#000000"/>
-  <g fill="#ffffff" stroke="#ffffff" stroke-width="2" stroke-linejoin="round">
-    <!-- Shackle ring -->
-    <circle cx="256" cy="92" r="33" fill="none" stroke="#ffffff" stroke-width="22"/>
-    <!-- Shank (tapered) -->
-    <path d="M242 122 L270 122 L266 392 L246 392 Z"/>
-    <!-- Stock: bowed crossbar with sharp tribal points -->
-    <path d="M120 196 L168 176 Q256 152 344 176 L392 196 L344 206 Q256 184 168 206 Z"/>
-    <!-- Flukes: tribal crescent with sharp horn tips -->
-    <path d="M92 246
-             C 96 358 168 452 256 452
-             C 344 452 416 358 420 246
-             C 404 316 366 350 324 364
-             C 302 372 280 376 256 376
-             C 232 376 210 372 188 364
-             C 146 350 108 316 92 246 Z"/>
+  <defs>
+    <clipPath id="shankClip">
+      <path d="M234 124 L278 124 L270 372 L242 372 Z"/>
+    </clipPath>
+  </defs>
+  <g fill="#ffffff" stroke="#ffffff" stroke-linejoin="round" stroke-linecap="round">
+    <!-- Shackle ring (double ring) -->
+    <circle cx="256" cy="86" r="30" fill="none" stroke-width="15"/>
+    <circle cx="256" cy="86" r="11" fill="none" stroke-width="6"/>
+    <!-- Stitched dots around ring -->
+    <circle cx="303.0" cy="86.0" r="4.2"/>
+<circle cx="301.5" cy="97.7" r="4.2"/>
+<circle cx="297.2" cy="108.6" r="4.2"/>
+<circle cx="290.3" cy="118.2" r="4.2"/>
+<circle cx="281.2" cy="125.7" r="4.2"/>
+<circle cx="270.5" cy="130.7" r="4.2"/>
+<circle cx="259.0" cy="132.9" r="4.2"/>
+<circle cx="247.2" cy="132.2" r="4.2"/>
+<circle cx="236.0" cy="128.5" r="4.2"/>
+<circle cx="226.0" cy="122.2" r="4.2"/>
+<circle cx="218.0" cy="113.6" r="4.2"/>
+<circle cx="212.3" cy="103.3" r="4.2"/>
+<circle cx="209.4" cy="91.9" r="4.2"/>
+<circle cx="209.4" cy="80.1" r="4.2"/>
+<circle cx="212.3" cy="68.7" r="4.2"/>
+<circle cx="218.0" cy="58.4" r="4.2"/>
+<circle cx="226.0" cy="49.8" r="4.2"/>
+<circle cx="236.0" cy="43.5" r="4.2"/>
+<circle cx="247.2" cy="39.8" r="4.2"/>
+<circle cx="259.0" cy="39.1" r="4.2"/>
+<circle cx="270.5" cy="41.3" r="4.2"/>
+<circle cx="281.2" cy="46.3" r="4.2"/>
+<circle cx="290.3" cy="53.8" r="4.2"/>
+<circle cx="297.2" cy="63.4" r="4.2"/>
+<circle cx="301.5" cy="74.3" r="4.2"/>
+    <!-- Shank with wound-rope texture -->
+    <path d="M234 124 L278 124 L270 372 L242 372 Z" stroke="none"/>
+    <g stroke="#000000" stroke-width="9" clip-path="url(#shankClip)">
+      <line x1="226" y1="130" x2="286" y2="148"/><line x1="226" y1="154" x2="286" y2="172"/><line x1="226" y1="178" x2="286" y2="196"/><line x1="226" y1="202" x2="286" y2="220"/><line x1="226" y1="226" x2="286" y2="244"/><line x1="226" y1="250" x2="286" y2="268"/><line x1="226" y1="274" x2="286" y2="292"/><line x1="226" y1="298" x2="286" y2="316"/><line x1="226" y1="322" x2="286" y2="340"/><line x1="226" y1="346" x2="286" y2="364"/>
+    </g>
+    <!-- Stock with tribal pennant guards -->
+    <path d="M118 206 L170 182 Q256 162 342 182 L394 206 L342 214 Q256 196 170 214 Z"/>
+    <!-- Stitched dots along pennant edges -->
+    <circle cx="131.0" cy="199.5" r="4.5"/>
+<circle cx="144.0" cy="193.0" r="4.5"/>
+<circle cx="157.0" cy="186.5" r="4.5"/>
+<circle cx="170.0" cy="180.0" r="4.5"/>
+<circle cx="381.0" cy="199.5" r="4.5"/>
+<circle cx="368.0" cy="193.0" r="4.5"/>
+<circle cx="355.0" cy="186.5" r="4.5"/>
+<circle cx="342.0" cy="180.0" r="4.5"/>
+    <!-- Flukes: tribal crescent -->
+    <path d="M96 252
+             C 100 366 172 460 256 460
+             C 340 460 412 366 416 252
+             C 400 322 360 358 318 372
+             C 296 380 276 384 256 384
+             C 236 384 216 380 194 372
+             C 152 358 112 322 96 252 Z"/>
+    <!-- Stitched dots along fluke outer edge -->
+    <circle cx="101.4" cy="293.1" r="5"/>
+<circle cx="113.4" cy="330.3" r="5"/>
+<circle cx="131.4" cy="363.3" r="5"/>
+<circle cx="154.3" cy="391.5" r="5"/>
+<circle cx="181.2" cy="414.7" r="5"/>
+<circle cx="211.5" cy="432.3" r="5"/>
+<circle cx="276.6" cy="432.3" r="5"/>
+<circle cx="307.3" cy="414.7" r="5"/>
+<circle cx="335.6" cy="391.5" r="5"/>
+<circle cx="361.1" cy="363.3" r="5"/>
+<circle cx="383.3" cy="330.3" r="5"/>
+<circle cx="401.7" cy="293.1" r="5"/>
     <!-- Central downward spike -->
-    <path d="M236 440 L256 488 L276 440 Z"/>
+    <path d="M234 446 L256 496 L278 446 Z"/>
   </g>
 </svg>
