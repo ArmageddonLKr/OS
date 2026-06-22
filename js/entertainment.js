@@ -520,6 +520,12 @@ export class Entertainment {
         return m ? m[1].trim() : '';
     }
 
+    /* Busca por texto no Google News ordena por relevância, não por data —
+       reordena aqui pra notícia mais recente aparecer primeiro */
+    static _sortByDate(items) {
+        return [...items].sort((a, b) => new Date(b.pubDate || 0) - new Date(a.pubDate || 0));
+    }
+
     /* ── BOXE/MMA: lutadores favoritos ──────────────── */
     static getFighters() { return Store.get('orbit_fighters', []); }
     static saveFighters(f) { Store.set('orbit_fighters', f); }
@@ -674,7 +680,7 @@ export class Entertainment {
         const hit = scGet(ck, TTL_NEWS);
         if (hit) return hit;
         const feed = 'https://news.google.com/rss/search?q=transfer%C3%AAncia+futebol+OR+contrata%C3%A7%C3%A3o+OR+refor%C3%A7o+OR+bomba+transfer&hl=pt-BR&gl=BR&ceid=BR:pt-BR';
-        const items = await this._fetchRSS(feed, count);
+        const items = this._sortByDate(await this._fetchRSS(feed, count));
         const result = items.slice(0, count).map(it => ({
             title: (it.title || '').replace(/ - [^-]+$/, '').trim(),
             url: it.link || '#',
@@ -690,7 +696,7 @@ export class Entertainment {
         if (!teamName) return [];
         const q = encodeURIComponent(`${teamName} transferência OR contratação OR reforço OR negociação OR assina`);
         const feed = `https://news.google.com/rss/search?q=${q}&hl=pt-BR&gl=BR&ceid=BR:pt-BR`;
-        const items = await this._fetchRSS(feed, 8);
+        const items = this._sortByDate(await this._fetchRSS(feed, 8));
         return items.map(it => ({
             title: (it.title || '').replace(/ - [^-]+$/, '').trim(),
             url: it.link || '#',
